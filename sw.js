@@ -1,0 +1,2 @@
+self.addEventListener('push',event=>{let data={};try{data=event.data?.json()||{}}catch{};event.waitUntil(self.registration.showNotification(data.title||'Need Anything?',{body:data.body||'Your list has an update',icon:'/icon.svg',badge:'/icon.svg',data:{url:data.url||'/'},tag:'need-anything-'+Date.now()}))});
+self.addEventListener('notificationclick',event=>{event.notification.close();const url=new URL(event.notification.data?.url||'/',self.location.origin);if(url.origin!==self.location.origin)return;event.waitUntil(clients.openWindow(url.href))});
