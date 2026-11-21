@@ -119,8 +119,12 @@ class Handler(SimpleHTTPRequestHandler):
                         obj['shopping']={'id':token(),'by':person,'lastCall':False}
                         obj['events'].append({'id':token(),'type':'start','by':person,'at':now})
                     elif action=='lastCall':
-                        if not shop:return self.reply(409,{'error':'No active shopping trip'})
+                        if not shop:
+                            return self.reply(409, {'error':'No active shopping trip'})
+                        if shop['lastCall']:
+                            return self.reply(409, {'error':'Last Call already sent'})
                         if not shop['lastCall']:
+
                             shop['lastCall']=True;obj['events'].append({'id':token(),'type':'lastCall','by':person,'at':now})
                     elif action=='done':
                         if not shop:return self.reply(409,{'error':'No active shopping trip'})
