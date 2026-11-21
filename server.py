@@ -50,10 +50,13 @@ class Handler(SimpleHTTPRequestHandler):
     def reply(self,status,data):
         body=json.dumps(data).encode()
         self.send_response(status);self.send_header('Content-Type','application/json; charset=utf-8');self.send_header('Cache-Control','no-store');self.send_header('Content-Length',str(len(body)));self.end_headers();self.wfile.write(body)
+    
     def read_json(self):
-        n=int(self.headers.get('Content-Length','0'))
-        if n>50000 or n<0: raise ValueError('Request too large')
+        n = int(self.headers.get('Content-Length', '0'))
+        if n <= 0 or n > 10000:
+            raise ValueError('Invalid request size')
         return json.loads(self.rfile.read(n))
+
     def do_GET(self):
         u=urlparse(self.path)
         if u.path=='/api/list':
