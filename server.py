@@ -64,7 +64,16 @@ class Handler(SimpleHTTPRequestHandler):
             return self.reply(200,{'list':json.loads(row['data']),'version':row['updated']})
         if u.path=='/api/health':return self.reply(200,{'ok':True})
         if u.path=='/api/push-config':return self.reply(200,{'publicKey':os.environ.get('VAPID_PUBLIC_KEY','')})
+        
+        public_files = {
+            '/', '/index.html', '/sw.js',
+            '/manifest.webmanifest', '/icon.svg'
+        }
+        if u.path not in public_files:
+            return self.reply(404, {'error': 'Not found'})
+        self.path = '/index.html' if u.path == '/' else u.path
         return super().do_GET()
+
     def do_POST(self):
         u=urlparse(self.path)
         try:
