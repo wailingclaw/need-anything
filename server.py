@@ -128,9 +128,13 @@ class Handler(SimpleHTTPRequestHandler):
                 'publicKey': os.environ.get('VAPID_PUBLIC_KEY', '')
             })
 
-        public_files = {
-            '/', '/index.html', '/sw.js',
-            '/manifest.webmanifest', '/icon.svg'
+       
+public_files = {
+    '/', '/index.html', '/sw.js',
+    '/manifest.webmanifest', '/icon.svg',
+    '/needanything-logo.png'
+}
+
         }
         if u.path not in public_files:
             return self.reply(404, {'error': 'Not found'})
