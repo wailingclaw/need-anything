@@ -8,7 +8,7 @@
   "theme_color": "#39ff14",
   "icons": [
     {
-      "src": "/logo.png",
+      "src": "/needanything-logo.png",
       "sizes": "1024x1024",
       "type": "image/png",
       "purpose": "any"
