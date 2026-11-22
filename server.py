@@ -129,10 +129,6 @@ class Handler(SimpleHTTPRequestHandler):
             })
 
        
-public_files = {
-    '/', '/index.html', '/sw.js',
-    '/manifest.webmanifest', '/icon.svg',
-    '/needanything-logo.png'
 
         public_files = {
             '/', '/index.html', '/sw.js',
@@ -141,6 +137,9 @@ public_files = {
         }
         if u.path not in public_files:
             return self.reply(404, {'error': 'Not found'})
+
+        self.path = '/index.html' if u.path == '/' else u.path
+        return super().do_GET()
 
 
     def do_POST(self):
