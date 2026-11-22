@@ -38,6 +38,26 @@ let pushRegistration=null;
 let state={person:saved.person||'',links:Array.isArray(saved.links)?saved.links:[]},current=null,lists={},lastEvents={},busy=false;
 const save=()=>localStorage.setItem(KEY,JSON.stringify(state));
 const escapeHTML=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+const shoppingCategories = {
+  '🥬 Produce': ['apple','banana','lettuce','tomato','potato','onion','carrot','broccoli','grape','strawberry','avocado','orange','lemon','lime','spinach','pepper'],
+  '🥛 Dairy & Eggs': ['milk','cheese','egg','butter','yogurt','cream','cottage cheese'],
+  '🥩 Meat & Seafood': ['chicken','beef','pork','bacon','sausage','steak','shrimp','salmon','fish','turkey'],
+  '🍞 Bakery': ['bread','bagel','bun','roll','tortilla','muffin','croissant'],
+  '🧊 Frozen': ['frozen','ice cream','popsicle'],
+  '🥫 Pantry': ['rice','pasta','flour','sugar','cereal','oatmeal','oil','sauce','coffee','peanut butter','soup','beans'],
+  '🧼 Household': ['soap','detergent','toilet paper','paper towel','trash bag','cleaner','shampoo','toothpaste']
+};
+
+function categoryForItem(name) {
+  const words = name.toLowerCase().trim();
+  for (const [category, keywords] of Object.entries(shoppingCategories)) {
+    if (keywords.some(word => new RegExp('\\b' + word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + 's?\\b', 'i').test(words))) {
+      return category;
+    }
+  }
+  return '📦 Other';
+}
 function toast(s){$('toast').textContent=s;$('toast').classList.remove('hide');clearTimeout(window.toastTimer);window.toastTimer=setTimeout(()=>$('toast').classList.add('hide'),4500)}
 async function api(path,data){let r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});let j=await r.json();if(!r.ok)throw Error(j.error||'Connection failed');return j}
 
