@@ -260,7 +260,7 @@ class Handler(SimpleHTTPRequestHandler):
                         if not name or len(items) >= 300:
                             return self.reply(400, {'error': 'Item missing or list full'})
 
-                        items.append({
+                       items.insert(0, {
                             'id': token(),
                             'name': name,
                             'qty': qty,
