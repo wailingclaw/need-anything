@@ -87,7 +87,8 @@ function linkFor(l){return `${location.origin}/?list=${encodeURIComponent(l.id)}
 
 function getLink(){return state.links.find(l=>l.id===current)}
 function getList(){return lists[current]}
-async function refresh(silent=true){for(let l of state.links){try{let r=await fetch(`/api/list?id=${encodeURIComponent(l.id)}&key=${encodeURIComponent(l.key)}`,{cache:'no-store'});if(!r.ok)continue;let data=await r.json(),prev=lists[l.id];lists[l.id]=data.list;if(prev&&data.list.events?.length){let old=new Set((prev.events||[]).map(x=>x.id));let added=data.list.events.filter(x=>!old.has(x.id));for(let e of added){if(e.by!==state.person){if(e.type==='start')toast(`${e.by} is shopping! Need anything?`);if(e.type==='lastCall')toast(`🔔 Last call from ${e.by}!`)}}}}catch(e){if(!silent)toast('Unable to connect. Check your internet connection.')}}render()}
+async function refresh(silent=true){for(let l of state.links){try{let r=await fetch(`/api/list?id=${encodeURIComponent(l.id)}&key=${encodeURIComponent(l.key)}`,{cache:'no-store'});if(!r.ok)continue;let data=await r.json(),prev=lists[l.id];if ((draggingItem || busy) && l.id === current) continue;
+lists[l.id]=data.list;if(prev&&data.list.events?.length){let old=new Set((prev.events||[]).map(x=>x.id));let added=data.list.events.filter(x=>!old.has(x.id));for(let e of added){if(e.by!==state.person){if(e.type==='start')toast(`${e.by} is shopping! Need anything?`);if(e.type==='lastCall')toast(`🔔 Last call from ${e.by}!`)}}}}catch(e){if(!silent)toast('Unable to connect. Check your internet connection.')}}if (!draggingItem && !busy) render()}
 async function act(action,extra={}){if(busy)return;let l=getLink();if(!l)return;busy=true;try{let result=await api('/api/action',{id:l.id,key:l.key,action,person:state.person||'Someone',senderEndpoint:(await getSenderEndpoint()),...extra});lists[l.id]=result.list;render()}catch(e){toast(e.message);await refresh()}finally{busy=false}}
 function render(){let list=getList();$('home').classList.toggle('hide',!!current);$('detail').classList.toggle('hide',!current);$('lists').innerHTML=state.links.length?state.links.map(l=>{let x=lists[l.id];return `<button class="card listcard" data-open="${escapeHTML(l.id)}"><span><strong>${escapeHTML(x?.name||l.name||'Shared list')}</strong><small>${x?x.items.filter(i=>!i.done).length+' items to get'+(x.shopping?' · 🟢 Shopping now':''):'Connecting…'}</small></span><span>→</span></button>`}).join(''):'<div class="empty">No lists yet. Create your first one! 🛒</div>';
 if(!current)return;if(!list){$('listTitle').textContent='Connecting…';$('count').textContent='';return}
@@ -132,7 +133,13 @@ ${!done ? `
     : `<div class="empty">${done ? 'Nothing checked off yet.' : 'Your list is clear! ✨'}</div>`;
 }
 
-$('items').innerHTML=rows(false);$('completed').innerHTML=rows(true)}
+
+if (!draggingItem) {
+  $('items').innerHTML = rows(false);
+  $('completed').innerHTML = rows(true);
+}
+}
+
 function b64bytes(base64){const padded=base64.replace(/-/g,'+').replace(/_/g,'/').padEnd(Math.ceil(base64.length/4)*4,'=');return Uint8Array.from(atob(padded),c=>c.charCodeAt(0))}
 async function getSenderEndpoint(){try{if(!pushRegistration)return '';const s=await pushRegistration.pushManager.getSubscription();return s?.endpoint||''}catch{return ''}}
 async function subscribeList(l){if(!pushRegistration)return;const s=await pushRegistration.pushManager.getSubscription();if(s)await api('/api/subscribe',{id:l.id,key:l.key,subscription:s.toJSON()})}
@@ -155,6 +162,78 @@ $('addForm').onsubmit=async e=>{e.preventDefault();let name=$('itemName').value.
 $('detail').addEventListener('change',e=>{if(e.target.matches('[data-check]'))act('check',{itemId:e.target.dataset.check,done:e.target.checked})});
 $('detail').addEventListener('click',e=>{let b=e.target.closest('[data-remove]');if(b)act('remove',{itemId:b.dataset.remove})});
 
+
+
+let draggingItem = null;
+let dragMoved = false;
+
+$('items').addEventListener('pointerdown', e => {
+  const handle = e.target.closest('.drag-handle');
+  if (!handle || draggingItem || busy) return;
+
+  const item = handle.closest('.item');
+  if (!item) return;
+
+  draggingItem = item;
+  dragMoved = false;
+  $('items').setPointerCapture(e.pointerId);
+  item.classList.add('dragging');
+});
+
+$('items').addEventListener('pointermove', e => {
+  if (!draggingItem) return;
+
+  const target = document.elementFromPoint(e.clientX, e.clientY);
+  const overItem = target?.closest('.item');
+
+  if (!overItem || overItem === draggingItem ||
+      overItem.parentElement !== $('items')) return;
+
+  const middle = overItem.getBoundingClientRect().top +
+    overItem.offsetHeight / 2;
+
+  const before = e.clientY < middle;
+
+  if ((before && draggingItem.nextSibling === overItem) ||
+      (!before && draggingItem.previousSibling === overItem)) return;
+
+  $('items').insertBefore(
+    draggingItem,
+    before ? overItem : overItem.nextSibling
+  );
+
+  dragMoved = true;
+});
+
+$('items').addEventListener('pointerup', async () => {
+  if (!draggingItem) return;
+
+  draggingItem.classList.remove('dragging');
+  draggingItem = null;
+
+  if (!dragMoved) return;
+  dragMoved = false;
+
+  const order = [...$('items').querySelectorAll('[data-drag]')]
+    .map(handle => handle.dataset.drag);
+
+  const list = getList();
+  const completed = list.items.filter(i => i.done).map(i => i.id);
+
+  await act('reorder', {order: [...order, ...completed]});
+});
+
+$('items').addEventListener('pointercancel', () => {
+  if (draggingItem) {
+    draggingItem.classList.remove('dragging');
+    draggingItem = null;
+    dragMoved = false;
+    render();
+  }
+});
+
+
+
 $('startShop').onclick=()=>{playDing();act('start')};
 $('lastCall').onclick=()=>{playDing();act('lastCall')};
 $('doneShop').onclick=()=>act('done');
@@ -164,7 +243,12 @@ $('share').onclick=async()=>{let l=getLink();if(!l)return;let url=linkFor(l);try
 async function init(){let q=new URLSearchParams(location.search),id=q.get('list'),key=q.get('key');if(id&&key&&!state.links.some(l=>l.id===id)){state.links.push({id,key,name:'Shared list'});save()}if(id&&key){current=id;history.replaceState({},'',location.pathname)}if('serviceWorker' in navigator && window.isSecureContext){try{pushRegistration=await navigator.serviceWorker.register('/sw.js')}catch(e){console.warn('Service worker unavailable')}}
 if(!state.person)$('nameDialog').showModal();render();await refresh(false);
 if(pushRegistration&&Notification.permission==='granted'){for(const l of state.links)subscribeList(l).catch(()=>{});$('pushStatus').textContent='Notifications enabled on this device.'}
-setInterval(()=>{if(!document.hidden)refresh()},2500)}init();
+
+
+setInterval(()=>{if(!document.hidden && !draggingItem && !busy)refresh()},2500)
+}init();
+
+
 
 </script>
 </body>
