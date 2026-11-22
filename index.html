@@ -151,7 +151,7 @@ async function enableNotifications(){try{
  pushRegistration=await navigator.serviceWorker.ready;
  let sub=await pushRegistration.pushManager.getSubscription();if(!sub)sub=await pushRegistration.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64bytes(config.publicKey)});
  for(const l of state.links)await subscribeList(l);
- $('pushStatus').textContent='Notifications enabled on this device.';toast('Shopping alerts enabled!');
+ $('pushStatus').textContent='Notifications enabled on this device.';$('enablePush').classList.add('hide');toast('Shopping alerts enabled!');
  }catch(e){toast('Could not enable notifications: '+e.message)}}
 $('enablePush').onclick=enableNotifications;
 $('create').onclick=()=>$('createDialog').showModal();
@@ -239,10 +239,11 @@ $('lastCall').onclick=()=>{playDing();act('lastCall')};
 $('doneShop').onclick=()=>act('done');
 
 $('deleteList').textContent='Leave this shared list';$('deleteList').onclick=()=>{if(confirm('Remove this list from your device? Others can still use it.')){const departing=getLink();getSenderEndpoint().then(endpoint=>endpoint&&api('/api/unsubscribe',{id:departing.id,key:departing.key,endpoint})).catch(()=>{});state.links=state.links.filter(l=>l.id!==current);delete lists[current];current=null;save();render()}};
-$('share').onclick=async()=>{let l=getLink();if(!l)return;let url=linkFor(l);try{if(navigator.share)await navigator.share({title:'Need Anything?',text:'Join my shopping list!',url});else if(navigator.clipboard){await navigator.clipboard.writeText(url);toast('Invitation link copied!')}else prompt('Copy this private invitation link:',url)}catch(e){if(e.name!=='AbortError')prompt('Copy this private invitation link:',url)}};
+$('share').onclick=async()=>{let l=getLink();if(!l)return;let url=linkFor(l);try{if(navigator.share)await navigator.share({title:'Need Anything?',text:'Join my shopping list!',url});else if(navigator.clipboard){await navigator.clipboard.writeText(url);toast('Invitation link copied!')}else prompt('Copy this private invitation link:',url)}catch(e){if(e.name!=='AbortError')prompt('Copy this private invitation link:',url)}};$('enablePush').classList.toggle('hide', Notification.permission === 'granted');
 async function init(){let q=new URLSearchParams(location.search),id=q.get('list'),key=q.get('key');if(id&&key&&!state.links.some(l=>l.id===id)){state.links.push({id,key,name:'Shared list'});save()}if(id&&key){current=id;history.replaceState({},'',location.pathname)}if('serviceWorker' in navigator && window.isSecureContext){try{pushRegistration=await navigator.serviceWorker.register('/sw.js')}catch(e){console.warn('Service worker unavailable')}}
 if(!state.person)$('nameDialog').showModal();render();await refresh(false);
 if(pushRegistration&&Notification.permission==='granted'){for(const l of state.links)subscribeList(l).catch(()=>{});$('pushStatus').textContent='Notifications enabled on this device.'}
+$('enablePush').classList.toggle('hide', Notification.permission === 'granted');
 
 
 setInterval(()=>{if(!document.hidden && !draggingItem && !busy)refresh()},2500)
