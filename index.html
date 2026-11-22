@@ -1,6 +1,27 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#ffffff"><title>Need Anything?</title><link rel="manifest" href="/manifest.webmanifest"><style>
 :root{font-family:system-ui,-apple-system,Segoe UI,sans-serif;color:#171717;background:#fff}*{box-sizing:border-box}body{margin:0}button,input{font:inherit}button{cursor:pointer}button:focus-visible,input:focus-visible{outline:3px solid #169900;outline-offset:2px}.wrap{max-width:620px;margin:auto;padding:24px 18px 70px}.brand{display:flex;align-items:center;gap:12px}.logo{background:#39ff14;border-radius:16px;padding:12px;font-size:27px}.brand h1{font-size:27px;margin:0;letter-spacing:-1px}.muted{color:#666}.brand p{margin:3px 0 0;font-size:13px}.top{display:flex;justify-content:space-between;align-items:center;margin:32px 0 12px;gap:12px}h2{margin:0;font-size:21px}button{border:0;border-radius:14px;padding:13px 16px;font-weight:750;background:#eee;color:#111}.primary{background:#39ff14}.outline{background:white;border:1px solid #ddd}.card{background:#f6f6f6;border:1px solid #ededed;border-radius:20px;padding:17px;margin:12px 0}.listcard{display:flex;align-items:center;justify-content:space-between;width:100%;text-align:left}.listcard strong{font-size:18px}.listcard small{display:block;margin-top:5px;color:#666}.row{display:flex;gap:8px}.row input{min-width:0;flex:1}input{border:1px solid #ddd;border-radius:13px;padding:13px;background:#fff}.full{width:100%}.back{padding:8px 0;background:none}.shopping{background:#eaffdf;border:1px solid #b1ff98}.shopping strong{display:block}.shopping p{margin:7px 0 0}.actions{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin:15px 0}.actions button{min-height:54px}.item{display:flex;align-items:center;gap:11px;padding:14px 4px;border-bottom:1px solid #e5e5e5}.item:last-child{border:0}.item input[type=checkbox]{width:23px;height:23px;accent-color:#39c914;flex:none}.item .name{flex:1;min-width:0;overflow-wrap:anywhere}.item.done .name{text-decoration:line-through;color:#777}.badge{font-size:10px;font-weight:850;background:#39ff14;padding:4px 7px;border-radius:8px}.iconbtn{padding:6px 9px;background:transparent;color:#666}.empty{text-align:center;padding:35px 10px;color:#777}.pill{background:#e6ffe0;border-radius:30px;padding:6px 11px;font-size:12px;font-weight:800}.notice{padding:12px 14px;border-radius:13px;background:#171717;color:#fff;margin:15px 0}.footer{font-size:12px;text-align:center;margin-top:32px;color:#777}.history{margin-top:26px}dialog{border:0;border-radius:22px;padding:24px;width:min(92vw,420px);box-shadow:0 15px 80px #0004}dialog::backdrop{background:#0008}dialog h2{margin-bottom:14px}.stack{display:grid;gap:12px}.hide{display:none!important}
 
+.drag-handle {
+  flex: none;
+  border: 0;
+  background: transparent;
+  color: #777;
+  padding: 8px 5px;
+  font-size: 22px;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+.item.dragging {
+  opacity: 0.45;
+  background: #eaffdf;
+}
+
 </style>
 <script>
 function playDing() {
@@ -94,10 +115,19 @@ function rows(done) {
           ? '<span class="badge">NEW</span>'
           : ''}
 
-        <button class="iconbtn"
-          data-remove="${escapeHTML(i.id)}"
-          aria-label="Remove ${escapeHTML(i.name)}">✕</button>
-      </div>
+
+<button class="iconbtn"
+  data-remove="${escapeHTML(i.id)}"
+  aria-label="Remove ${escapeHTML(i.name)}">✕</button>
+
+${!done ? `
+  <button class="drag-handle"
+    type="button"
+    data-drag="${escapeHTML(i.id)}"
+    aria-label="Drag to reorder ${escapeHTML(i.name)}">⠿</button>
+` : ''}
+</div>
+
     `).join('')
     : `<div class="empty">${done ? 'Nothing checked off yet.' : 'Your list is clear! ✨'}</div>`;
 }
