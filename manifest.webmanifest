@@ -1,1 +1,17 @@
-{"name":"Need Anything?","short_name":"Need Anything","start_url":"/","display":"standalone","background_color":"#ffffff","theme_color":"#39ff14","icons":[{"src":"/icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any"}]}
+
+{
+  "name": "Need Anything?",
+  "short_name": "Need Anything",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#39ff14",
+  "icons": [
+    {
+      "src": "/logo.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
