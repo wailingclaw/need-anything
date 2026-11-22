@@ -73,54 +73,35 @@ if(!current)return;if(!list){$('listTitle').textContent='Connecting…';$('count
 $('listTitle').textContent=list.name;$('count').textContent=`${list.items.filter(i=>!i.done).length} left to get`;$('shoppingBanner').classList.toggle('hide',!list.shopping);if(list.shopping)$('shoppingBanner').innerHTML=`<strong>🟢 ${escapeHTML(list.shopping.by)} is shopping!</strong><p>${list.shopping.lastCall?'🔔 Last call! Anything else?':'Need anything? Add it below.'}</p>`;
 $('startShop').classList.toggle('hide',!!list.shopping);$('lastCall').classList.toggle('hide',!list.shopping);$('doneShop').classList.toggle('hide',!list.shopping);$('lastCall').disabled=!!list.shopping?.lastCall;
 
+
 function rows(done) {
-  const items = list.items.filter(i => i.done === done);
+  let a = list.items.filter(i => i.done === done);
 
-  if (!items.length) {
-    return `<div class="empty">${done ? 'Nothing checked off yet.' : 'Your list is clear! ✨'}</div>`;
-  }
+  return a.length
+    ? a.map(i => `
+      <div class="item ${done ? 'done' : ''}">
+        <input type="checkbox"
+          data-check="${escapeHTML(i.id)}"
+          ${done ? 'checked' : ''}
+          aria-label="Mark ${escapeHTML(i.name)} ${done ? 'needed' : 'purchased'}">
 
-  function itemHTML(i) {
-    return `<div class="item ${done ? 'done' : ''}">
-      <input type="checkbox" data-check="${escapeHTML(i.id)}" ${done ? 'checked' : ''} aria-label="Mark ${escapeHTML(i.name)} ${done ? 'needed' : 'purchased'}">
-      <span class="name">${escapeHTML(i.name)} ${i.qty ? `<small class="muted">· ${escapeHTML(i.qty)}</small>` : ''}</span>
-      ${!done && list.shopping && i.addedDuring === list.shopping.id ? '<span class="badge">NEW</span>' : ''}
-      <button class="iconbtn" data-remove="${escapeHTML(i.id)}" aria-label="Remove ${escapeHTML(i.name)}">✕</button>
-    </div>`;
-  }
+        <span class="name">
+          ${escapeHTML(i.name)}
+          ${i.qty ? `<small class="muted">· ${escapeHTML(i.qty)}</small>` : ''}
+        </span>
 
-  if (done) {
-    return items.map(itemHTML).join('');
-  }
+        ${!done && list.shopping && i.addedDuring === list.shopping.id
+          ? '<span class="badge">NEW</span>'
+          : ''}
 
-  const groups = {};
-
-  for (const item of items) {
-    const category = categoryForItem(item.name);
-    if (!groups[category]) groups[category] = [];
-    groups[category].push(item);
-  }
-
-  const order = [
-    '🥬 Produce',
-    '🥛 Dairy & Eggs',
-    '🥩 Meat & Seafood',
-    '🍞 Bakery',
-    '🧊 Frozen',
-    '🥫 Pantry',
-    '🧼 Household',
-    '📦 Other'
-  ];
-
-  return order
-    .filter(category => groups[category]?.length)
-    .map(category => `
-      <div style="font-weight:800;margin:18px 0 8px;font-size:15px">
-        ${category}
+        <button class="iconbtn"
+          data-remove="${escapeHTML(i.id)}"
+          aria-label="Remove ${escapeHTML(i.name)}">✕</button>
       </div>
-      ${groups[category].map(itemHTML).join('')}
-    `).join('');
+    `).join('')
+    : `<div class="empty">${done ? 'Nothing checked off yet.' : 'Your list is clear! ✨'}</div>`;
 }
+
 $('items').innerHTML=rows(false);$('completed').innerHTML=rows(true)}
 function b64bytes(base64){const padded=base64.replace(/-/g,'+').replace(/_/g,'/').padEnd(Math.ceil(base64.length/4)*4,'=');return Uint8Array.from(atob(padded),c=>c.charCodeAt(0))}
 async function getSenderEndpoint(){try{if(!pushRegistration)return '';const s=await pushRegistration.pushManager.getSubscription();return s?.endpoint||''}catch{return ''}}
