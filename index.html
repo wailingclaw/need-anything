@@ -9,7 +9,9 @@ const save=()=>localStorage.setItem(KEY,JSON.stringify(state));
 const escapeHTML=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function toast(s){$('toast').textContent=s;$('toast').classList.remove('hide');clearTimeout(window.toastTimer);window.toastTimer=setTimeout(()=>$('toast').classList.add('hide'),4500)}
 async function api(path,data){let r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});let j=await r.json();if(!r.ok)throw Error(j.error||'Connection failed');return j}
-function linkFor(l){return `${location.origin}/?list=${encodeURIComponent(l.id)}&key=${encodeURIComponent(l.key)}`}
+
+function linkFor(l){return `http://192.168.1.172:8000/?list=${encodeURIComponent(l.id)}&key=${encodeURIComponent(l.key)}`}
+
 function getLink(){return state.links.find(l=>l.id===current)}
 function getList(){return lists[current]}
 async function refresh(silent=true){for(let l of state.links){try{let r=await fetch(`/api/list?id=${encodeURIComponent(l.id)}&key=${encodeURIComponent(l.key)}`,{cache:'no-store'});if(!r.ok)continue;let data=await r.json(),prev=lists[l.id];lists[l.id]=data.list;if(prev&&data.list.events?.length){let old=new Set((prev.events||[]).map(x=>x.id));let added=data.list.events.filter(x=>!old.has(x.id));for(let e of added){if(e.by!==state.person){if(e.type==='start')toast(`${e.by} is shopping! Need anything?`);if(e.type==='lastCall')toast(`🔔 Last call from ${e.by}!`)}}}}catch(e){if(!silent)toast('Unable to connect. Check your internet connection.')}}render()}
