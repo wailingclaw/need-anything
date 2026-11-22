@@ -268,6 +268,22 @@ class Handler(SimpleHTTPRequestHandler):
                             'addedDuring': shop['id'] if shop else None
                         })
 
+                    elif action == 'reorder':
+                        order = data.get('order')
+
+                        if (
+                            not isinstance(order, list)
+                            or len(order) != len(items)
+                            or not all(isinstance(x, str) for x in order)
+                            or len(set(order)) != len(order)
+                            or set(order) != {x['id'] for x in items}
+                        ):
+                            return self.reply(400, {'error': 'Invalid item order'})
+
+                        by_id = {x['id']: x for x in items}
+                        obj['items'] = [by_id[item_id] for item_id in order]
+
+
                     elif action == 'check':
                         item = next(
                             (x for x in items if x['id'] == data.get('itemId')),
