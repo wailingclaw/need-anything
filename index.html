@@ -86,10 +86,8 @@ async function init(){let q=new URLSearchParams(location.search),id=q.get('list'
 if(!state.person)$('nameDialog').showModal();render();await refresh(false);
 if(pushRegistration&&Notification.permission==='granted'){for(const l of state.links)subscribeList(l).catch(()=>{});$('pushStatus').textContent='Notifications enabled on this device.'}
 setInterval(()=>{if(!document.hidden)refresh()},2500)}init();
-</script></body>
+
 </script>
-<button onclick="playDing()" style="position:fixed;bottom:15px;right:15px;z-index:9999;background:#39ff14;color:#111;border-radius:30px;padding:14px 20px;box-shadow:0 4px 15px #0003;">
-🔔 Test Ding
-</button>
-</body></html>
+</body>
+</html>
 
