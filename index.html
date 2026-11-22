@@ -75,7 +75,11 @@ $('back').onclick=()=>{current=null;render()};$('lists').onclick=e=>{let b=e.tar
 $('addForm').onsubmit=async e=>{e.preventDefault();let name=$('itemName').value.trim(),qty=$('qty').value.trim();if(!name)return;await act('add',{name,qty});$('addForm').reset();$('itemName').focus()};
 $('detail').addEventListener('change',e=>{if(e.target.matches('[data-check]'))act('check',{itemId:e.target.dataset.check,done:e.target.checked})});
 $('detail').addEventListener('click',e=>{let b=e.target.closest('[data-remove]');if(b)act('remove',{itemId:b.dataset.remove})});
-$('startShop').onclick=()=>act('start');$('lastCall').onclick=()=>act('lastCall');$('doneShop').onclick=()=>act('done');
+
+$('startShop').onclick=()=>{playDing();act('start')};
+$('lastCall').onclick=()=>{playDing();act('lastCall')};
+$('doneShop').onclick=()=>act('done');
+
 $('deleteList').textContent='Leave this shared list';$('deleteList').onclick=()=>{if(confirm('Remove this list from your device? Others can still use it.')){const departing=getLink();getSenderEndpoint().then(endpoint=>endpoint&&api('/api/unsubscribe',{id:departing.id,key:departing.key,endpoint})).catch(()=>{});state.links=state.links.filter(l=>l.id!==current);delete lists[current];current=null;save();render()}};
 $('share').onclick=async()=>{let l=getLink();if(!l)return;let url=linkFor(l);try{if(navigator.share)await navigator.share({title:'Need Anything?',text:'Join my shopping list!',url});else if(navigator.clipboard){await navigator.clipboard.writeText(url);toast('Invitation link copied!')}else prompt('Copy this private invitation link:',url)}catch(e){if(e.name!=='AbortError')prompt('Copy this private invitation link:',url)}};
 async function init(){let q=new URLSearchParams(location.search),id=q.get('list'),key=q.get('key');if(id&&key&&!state.links.some(l=>l.id===id)){state.links.push({id,key,name:'Shared list'});save()}if(id&&key){current=id;history.replaceState({},'',location.pathname)}if('serviceWorker' in navigator && window.isSecureContext){try{pushRegistration=await navigator.serviceWorker.register('/sw.js')}catch(e){console.warn('Service worker unavailable')}}
