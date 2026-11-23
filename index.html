@@ -52,14 +52,98 @@ function playDing() {
 }
 </script>
 </head>
-<body><main class="wrap"><header class="brand"><div class="logo"><img src="/needanything-logo.png" alt="Need Anything? logo" style="width:42px;height:42px;object-fit:contain;display:block"></div><div><h1>Need Anything?</h1><p class="muted">Shopping is better together.</p></div></header><div id="toast" class="notice hide" role="status"></div><section id="home"><div class="top"><h2>Your lists</h2><button class="primary" id="create">+ New list</button></div><div id="lists"></div><p class="footer">No accounts. No ads. Share a private invitation link to shop together.</p></section><section id="detail" class="hide"><button class="back" id="back">← All lists</button><div class="top"><div><h2 id="listTitle"></h2><p class="muted" id="count"></p></div><button class="outline" id="share">Invite ↗</button></div><div class="card" id="pushPanel"><strong>Shopping alerts</strong><p class="muted" style="font-size:13px">Get alerts when someone starts shopping or sends a last call.</p><button id="enablePush" class="outline full">Enable notifications</button><p class="muted" id="pushStatus" style="font-size:12px"></p></div><div id="shoppingBanner" class="card shopping hide"></div><div class="actions"><button class="primary" id="startShop">🛒 I'm Shopping!</button><button id="lastCall" class="hide">🔔 Last Call!</button><button id="doneShop" class="hide">✓ Done Shopping</button></div><form id="addForm" class="row"><input id="itemName" aria-label="Item name" placeholder="Add an item…" maxlength="100" required><input id="qty" aria-label="Quantity" placeholder="Qty" style="max-width:76px" maxlength="20"><button class="primary" type="submit">+</button></form><div class="card"><strong>Need to get</strong><div id="items"></div></div><div class="history"><h2>Got it ✓</h2><div id="completed" class="card"></div></div><button id="deleteList" class="outline full" style="margin-top:28px;color:#a22">Delete this list</button></section></main><dialog id="nameDialog"><form method="dialog" id="nameForm" class="stack"><h2>What's your name?</h2><p class="muted" style="margin:0">We'll use this to show who's shopping.</p><input id="personName" placeholder="Your first name" required maxlength="40"><button class="primary" value="save">Continue</button></form></dialog><dialog id="createDialog"><form method="dialog" id="createForm" class="stack"><h2>New shopping list</h2><input id="newListName" placeholder="e.g. Groceries" required maxlength="60"><button class="primary" value="save">Create list</button><button value="cancel">Cancel</button></form></dialog><script>
+<body><main class="wrap"><header class="brand"><div class="logo"><img src="/needanything-logo.png" alt="Need Anything? logo" style="width:42px;height:42px;object-fit:contain;display:block"></div><div><h1>Need Anything?</h1><p class="muted">Shopping is better together.</p></div></header><div id="toast" class="notice hide" role="status"></div><section id="home"><div class="top"><h2>Your lists</h2><button class="primary" id="create">+ New list</button></div><div id="lists"></div><p class="footer">No accounts. No ads. Share a private invitation link to shop together.</p></section><section id="detail" class="hide"><button class="back" id="back">← All lists</button><div class="top"><div><h2 id="listTitle"></h2><p class="muted" id="count"></p></div><button class="outline" id="share">Invite ↗</button></div><div class="card" id="pushPanel"><strong>Shopping alerts</strong><p class="muted" style="font-size:13px">Get alerts when someone starts shopping or sends a last call.</p><button id="enablePush" class="outline full">Enable notifications</button><p class="muted" id="pushStatus" style="font-size:12px"></p></div><div class="card" id="membersPanel">
+  <strong>👥 List Members</strong>
+  <p class="muted" style="font-size:13px;margin-top:6px">
+    See who's here and when they were last active.
+  </p>
+  <div id="membersList">
+    <p class="muted" style="font-size:13px">Loading members...</p>
+  </div>
+</div><div id="shoppingBanner" class="card shopping hide"></div><div class="actions"><button class="primary" id="startShop">🛒 I'm Shopping!</button><button id="lastCall" class="hide">🔔 Last Call!</button><button id="doneShop" class="hide">✓ Done Shopping</button></div><form id="addForm" class="row"><input id="itemName" aria-label="Item name" placeholder="Add an item…" maxlength="100" required><input id="qty" aria-label="Quantity" placeholder="Qty" style="max-width:76px" maxlength="20"><button class="primary" type="submit">+</button></form><div class="card"><strong>Need to get</strong><div id="items"></div></div><div class="history"><h2>Got it ✓</h2><div id="completed" class="card"></div></div><button id="deleteList" class="outline full" style="margin-top:28px;color:#a22">Delete this list</button></section></main><dialog id="nameDialog"><form method="dialog" id="nameForm" class="stack"><h2>What's your name?</h2><p class="muted" style="margin:0">We'll use this to show who's shopping.</p><input id="personName" placeholder="Your first name" required maxlength="40"><button class="primary" value="save">Continue</button></form></dialog><dialog id="createDialog"><form method="dialog" id="createForm" class="stack"><h2>New shopping list</h2><input id="newListName" placeholder="e.g. Groceries" required maxlength="60"><button class="primary" value="save">Create list</button><button value="cancel">Cancel</button></form></dialog><script>
 const KEY='need-anything-v2', $=id=>document.getElementById(id);
 let saved={};try{saved=JSON.parse(localStorage.getItem(KEY))||{}}catch{};
 let pushRegistration=null;
-let state={person:saved.person||'',links:Array.isArray(saved.links)?saved.links:[]},current=null,lists={},lastEvents={},busy=false;
+let memberId = localStorage.getItem('need-anything-member-id');
+if (!memberId) {
+  memberId = crypto.randomUUID();
+  localStorage.setItem('need-anything-member-id', memberId);
+}let state={person:saved.person||'',links:Array.isArray(saved.links)?saved.links:[]},current=null,lists={},lastEvents={},busy=false;
 const save=()=>localStorage.setItem(KEY,JSON.stringify(state));
-const escapeHTML=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+async function updateMemberActivity() {
+  const link = state.links.find(l => l.id === current);
 
+  if (!link || !state.person || document.hidden) return;
+
+  try {
+    await api('/api/member', {
+      id: link.id,
+      key: link.key,
+      memberId,
+      name: state.person
+    });
+  } catch (e) {
+    console.warn('Member activity update failed:', e);
+  }
+}
+
+async function loadMembers() {
+  const link = state.links.find(l => l.id === current);
+  if (!link || document.hidden) return;
+
+  try {
+    const response = await fetch(
+      '/api/members?id=' + encodeURIComponent(link.id) +
+      '&key=' + encodeURIComponent(link.key)
+    );
+
+    if (!response.ok) throw new Error('Could not load members');
+
+    const data = await response.json();
+
+    if (current !== link.id) return;
+
+    const members = data.members || [];
+
+    $('membersList').innerHTML = members.length
+      ? members.map(m => {
+          const isYou = m.id === memberId;
+
+          const status = m.online
+            ? '🟢 Active now'
+            : 'Last active ' + timeAgo(m.lastActive);
+
+          return `
+            <div style="padding:10px 0;border-bottom:1px solid #ddd">
+              <strong>${escapeHTML(m.name)}${isYou ? ' (You)' : ''}</strong>
+              <div class="muted" style="font-size:12px">
+                ${status}
+              </div>
+            </div>
+          `;
+        }).join('')
+      : '<p class="muted">No members yet.</p>';
+
+  } catch (e) {
+    console.warn('Could not load members:', e);
+  }
+}
+
+function timeAgo(timestamp) {
+  const seconds = Math.max(0, Math.floor(Date.now() / 1000 - timestamp));
+
+  if (seconds < 60) return 'just now';
+
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return minutes + ' minute' + (minutes === 1 ? '' : 's') + ' ago';
+
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return hours + ' hour' + (hours === 1 ? '' : 's') + ' ago';
+
+  const days = Math.floor(hours / 24);
+  return days + ' day' + (days === 1 ? '' : 's') + ' ago';
+}
+const escapeHTML=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const shoppingCategories = {
   '🥬 Produce': ['apple','banana','lettuce','tomato','potato','onion','carrot','broccoli','grape','strawberry','avocado','orange','lemon','lime','spinach','pepper'],
   '🥛 Dairy & Eggs': ['milk','cheese','egg','butter','yogurt','cream','cottage cheese'],
@@ -161,9 +245,28 @@ async function enableNotifications(){try{
 }
 $('enablePush').onclick=enableNotifications;
 $('create').onclick=()=>$('createDialog').showModal();
-$('createForm').onsubmit=async e=>{e.preventDefault();let name=$('newListName').value.trim();if(!name)return;try{let r=await api('/api/create',{name});state.links.push({id:r.id,key:r.key,name});save();lists[r.id]=r.list;current=r.id;if(Notification.permission==='granted')subscribeList(state.links[state.links.length-1]).catch(()=>{});$('createDialog').close();$('newListName').value='';render()}catch(e){toast(e.message)}};
-$('nameForm').onsubmit=e=>{e.preventDefault();let n=$('personName').value.trim();if(n){state.person=n;save();$('nameDialog').close()}};
-$('back').onclick=()=>{current=null;render()};$('lists').onclick=e=>{let b=e.target.closest('[data-open]');if(b){current=b.dataset.open;render()}};
+$('createForm').onsubmit=async e=>{e.preventDefault();let name=$('newListName').value.trim();if(!name)return;try{let r=await api('/api/create',{name});state.links.push({id:r.id,key:r.key,name});save();lists[r.id]=r.list;current=r.id;if(Notification.permission==='granted')subscribeList(state.links[state.links.length-1]).catch(()=>{});$('createDialog').close();$('newListName').value='';render();await updateMemberActivity();loadMembers()}catch(e){toast(e.message)}};
+$('nameForm').onsubmit=async e=>{
+  e.preventDefault();
+  let n=$('personName').value.trim();
+  if(n){
+    state.person=n;
+    save();
+    $('nameDialog').close();
+    await updateMemberActivity();
+    loadMembers();
+  }
+};
+$('back').onclick=()=>{current=null;render()};
+$('lists').onclick=e=>{
+  let b=e.target.closest('[data-open]');
+  if(b){
+    current=b.dataset.open;
+    render();
+    updateMemberActivity();
+    loadMembers();
+  }
+};
 $('addForm').onsubmit=async e=>{e.preventDefault();let name=$('itemName').value.trim(),qty=$('qty').value.trim();if(!name)return;await act('add',{name,qty});$('addForm').reset();$('itemName').focus()};
 $('detail').addEventListener('change',e=>{if(e.target.matches('[data-check]'))act('check',{itemId:e.target.dataset.check,done:e.target.checked})});
 $('detail').addEventListener('click',e=>{let b=e.target.closest('[data-remove]');if(b)act('remove',{itemId:b.dataset.remove})});
@@ -251,8 +354,10 @@ if(!state.person)$('nameDialog').showModal();render();await refresh(false);
 if(pushRegistration&&Notification.permission==='granted'){for(const l of state.links)subscribeList(l).catch(()=>{});$('pushStatus').textContent='Notifications enabled on this device.'}
 $('enablePush').classList.toggle('hide', Notification.permission === 'granted');
 
-
-setInterval(()=>{if(!document.hidden && !draggingItem && !busy)refresh()},2500)
+await updateMemberActivity();
+loadMembers();
+setInterval(updateMemberActivity, 20000);
+setInterval(loadMembers, 10000);setInterval(()=>{if(!document.hidden && !draggingItem && !busy)refresh()},2500)
 }init();
 
 
