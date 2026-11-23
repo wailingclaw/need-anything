@@ -69,7 +69,14 @@ if (!memberId) {
   localStorage.setItem('need-anything-member-id', memberId);
 }let state={person:saved.person||'',links:Array.isArray(saved.links)?saved.links:[]},current=null,lists={},lastEvents={},busy=false;
 const save=()=>localStorage.setItem(KEY,JSON.stringify(state));
-async function updateMemberActivity() {
+const SEEN_KEY = 'need-anything-seen-events';
+let seenEvents = {};
+try {
+  seenEvents = JSON.parse(localStorage.getItem(SEEN_KEY)) || {};
+} catch {}
+
+const saveSeenEvents = () =>
+  localStorage.setItem(SEEN_KEY, JSON.stringify(seenEvents));async function updateMemberActivity() {
   const link = state.links.find(l => l.id === current);
 
   if (!link || !state.person || document.hidden) return;
