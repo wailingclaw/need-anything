@@ -218,7 +218,7 @@ seenEvents[l.id] = (result.list.events || [])
   .map(event => event.id);
 saveSeenEvents();
 render()}catch(e){toast(e.message);await refresh()}finally{busy=false}}
-function render(){updatePushPanel();let list=getList();$('home').classList.toggle('hide',!!current);$('detail').classList.toggle('hide',!current);$('lists').innerHTML=state.links.length?state.links.map(l=>{let x=lists[l.id];return `<button class="card listcard" data-open="${escapeHTML(l.id)}"><span><strong>${escapeHTML(x?.name||l.name||'Shared list')}</strong>${hasNewActivity(l.id)?'<span style="display:inline-block;background:#22c55e;color:#fff;font-size:10px;font-weight:800;padding:3px 7px;border-radius:20px;margin-left:8px;vertical-align:middle">NEW</span>':''}<small>${x?x.items.filter(i=>!i.done).length+' items to get'+(x.shopping?' · 🟢 Shopping now':''):'Connecting…'}</small>${x?.updatedAt?`<small>Updated ${timeAgo(x.updatedAt)}</small>`:''}</span><span>→</span></button>`}).join(''):'<div class="empty">No lists yet. Create your first one! 🛒</div>';
+function render(){updatePushPanel();let list=getList();$('home').classList.toggle('hide',!!current);$('detail').classList.toggle('hide',!current);$('lists').innerHTML=state.links.length?state.links.map(l=>{let x=lists[l.id];return `<div class="card listcard" data-open="${escapeHTML(l.id)}" role="button" tabindex="0" style="cursor:pointer"><span><strong>${escapeHTML(x?.name||l.name||'Shared list')}</strong>${hasNewActivity(l.id)?'<span style="display:inline-block;background:#22c55e;color:#fff;font-size:10px;font-weight:800;padding:3px 7px;border-radius:20px;margin-left:8px;vertical-align:middle">NEW</span>':''}<small>${x?x.items.filter(i=>!i.done).length+' items to get'+(x.shopping?' · 🟢 Shopping now':''):'Connecting…'}</small>${x?.updatedAt?`<small>Updated ${timeAgo(x.updatedAt)}</small>`:''}</span><span class="remove-list" data-close="${escapeHTML(l.id)}" title="Remove list" role="button" tabindex="0" aria-label="Remove list">✕</span></div>`}).join(''):'<div class="empty">No lists yet. Create your first one! 🛒</div>';
 if(!current)return;if(!list){$('listTitle').textContent='Connecting…';$('count').textContent='';return}
 $('listTitle').textContent=list.name;$('count').textContent=`${list.items.filter(i=>!i.done).length} left to get`;$('shoppingBanner').classList.toggle('hide',!list.shopping);if(list.shopping)$('shoppingBanner').innerHTML=`<strong>🟢 ${escapeHTML(list.shopping.by)} is shopping!</strong><p>${list.shopping.lastCall?'🔔 Last call! Anything else?':'Need anything? Add it below.'}</p>`;
 $('startShop').classList.toggle('hide',!!list.shopping);$('lastCall').classList.toggle('hide',!list.shopping);$('doneShop').classList.toggle('hide',!list.shopping);$('lastCall').disabled=!!list.shopping?.lastCall;
@@ -304,6 +304,20 @@ $('nameForm').onsubmit=async e=>{
 $('back').onclick=()=>{current=null;render()};
 
 $('lists').onclick=e=>{
+  let close=e.target.closest('[data-close]');
+  if(close){
+    e.stopPropagation();
+    const id=close.dataset.close;
+    if(confirm('Remove this list from your device? Others can still use it.')){
+      state.links=state.links.filter(l=>l.id!==id);
+      delete lists[id];
+      delete seenEvents[id];
+      saveSeenEvents();
+      save();
+      render();
+    }
+    return;
+  }
   let b=e.target.closest('[data-open]');
   if(b){
     current=b.dataset.open;
@@ -316,6 +330,19 @@ $('lists').onclick=e=>{
     loadMembers();
   }
 };
+$('lists').onkeydown=e=>{
+  if(e.key !== 'Enter' && e.key !== ' ') return;
+
+  const target=e.target.closest('[data-close], [data-open]');
+  if(!target) return;
+
+  e.preventDefault();
+
+  
+    target.click();
+  
+};
+
 $('addForm').onsubmit=async e=>{e.preventDefault();let name=$('itemName').value.trim(),qty=$('qty').value.trim();if(!name)return;await act('add',{name,qty});$('addForm').reset();$('itemName').focus()};
 $('detail').addEventListener('change',e=>{if(e.target.matches('[data-check]'))act('check',{itemId:e.target.dataset.check,done:e.target.checked})});
 $('detail').addEventListener('click',e=>{let b=e.target.closest('[data-remove]');if(b)act('remove',{itemId:b.dataset.remove})});
