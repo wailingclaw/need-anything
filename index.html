@@ -52,11 +52,8 @@ function playDing() {
 }
 </script>
 </head>
-<body><main class="wrap"><header class="brand"><div class="logo"><img src="/needanything-logo.png" alt="Need Anything? logo" style="width:42px;height:42px;object-fit:contain;display:block"></div><div><h1>Need Anything?</h1><p class="muted">Shopping is better together.</p></div></header><div id="toast" class="notice hide" role="status"></div><section id="home"><div class="top"><h2>Your lists</h2><button class="primary" id="create">+ New list</button></div><div id="lists"></div><p class="footer">No accounts. No ads. Share a private invitation link to shop together.</p></section><section id="detail" class="hide"><button class="back" id="back">← All lists</button><div class="top"><div><h2 id="listTitle"></h2><p class="muted" id="count"></p></div><button class="outline" id="share">Invite ↗</button></div><div class="card" id="pushPanel"><strong>Shopping alerts</strong><p class="muted" style="font-size:13px">Get alerts when someone starts shopping or sends a last call.</p><button id="enablePush" class="outline full">Enable notifications</button><p class="muted" id="pushStatus" style="font-size:12px"></p></div><div class="card" id="membersPanel">
-  <strong>👥 List Members</strong>
-  <p class="muted" style="font-size:13px;margin-top:6px">
-    See who's here and when they were last active.
-  </p>
+<div class="card" id="membersPanel">
+  <strong>👥 Members</strong>
   <div id="membersList">
     <p class="muted" style="font-size:13px">Loading members...</p>
   </div>
@@ -109,16 +106,20 @@ async function loadMembers() {
       ? members.map(m => {
           const isYou = m.id === memberId;
 
-          const status = m.online
-            ? '🟢 Active now'
-            : 'Last active ' + timeAgo(m.lastActive);
+          const dot = m.online ? '#27b34a' : '#aaa';
+          const status = m.online ? 'Online' : timeAgo(m.lastActive);
 
           return `
-            <div style="padding:10px 0;border-bottom:1px solid #ddd">
-              <strong>${escapeHTML(m.name)}${isYou ? ' (You)' : ''}</strong>
-              <div class="muted" style="font-size:12px">
-                ${status}
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:9px 0">
+              <div style="display:flex;align-items:center;gap:9px;min-width:0">
+                <span style="width:8px;height:8px;border-radius:50%;background:${dot};flex:none"></span>
+                <span style="font-size:14px;font-weight:600;overflow-wrap:anywhere">
+                  ${escapeHTML(m.name)}${isYou ? ' (You)' : ''}
+                </span>
               </div>
+              <span class="muted" style="font-size:12px;white-space:nowrap">
+                ${status}
+              </span>
             </div>
           `;
         }).join('')
