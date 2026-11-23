@@ -24,7 +24,7 @@ def init():
     with connect() as db:
         db.execute('SELECT 1 FROM public.lists LIMIT 1')
         db.execute('SELECT 1 FROM public.subscriptions LIMIT 1')
-
+        db.execute('SELECT 1 FROM public.list_members LIMIT 1')
 
 def token():
     return secrets.token_urlsafe(24)
@@ -119,7 +119,41 @@ class Handler(SimpleHTTPRequestHandler):
                 'list': json.loads(row['data']),
                 'version': row['updated']
             })
+        if u.path == '/api/members':
+            q = parse_qs(u.query)
+            lid = q.get('id', [''])[0]
+            key = q.get('key', [''])[0]
 
+            with LOCK, connect() as db:
+                row = db.execute(
+                    'SELECT secret FROM lists WHERE id=%s',
+                    (lid,)
+                ).fetchone()
+
+                if not row or not secrets.compare_digest(row['secret'], key):
+                    return self.reply(404, {'error': 'Invalid invitation'})
+
+                members = db.execute(
+                    '''SELECT member_id, name, last_active
+                       FROM list_members
+                       WHERE list_id=%s
+                       ORDER BY name''',
+                    (lid,)
+                ).fetchall()
+
+            now = time.time()
+
+            return self.reply(200, {
+                'members': [
+                    {
+                        'id': m['member_id'],
+                        'name': m['name'],
+                        'lastActive': m['last_active'],
+                        'online': now - m['last_active'] < 45
+                    }
+                    for m in members
+                ]
+            })
         if u.path == '/api/health':
             return self.reply(200, {'ok': True})
 
@@ -146,7 +180,36 @@ class Handler(SimpleHTTPRequestHandler):
         u = urlparse(self.path)
         try:
             data = self.read_json()
+            if u.path == '/api/member':
+                lid = str(data.get('id', ''))
+                key = str(data.get('key', ''))
+                member_id = str(data.get('memberId', ''))[:100]
+                name = str(data.get('name', '')).strip()[:40]
 
+                if not member_id or not name:
+                    return self.reply(400, {'error': 'Member details required'})
+
+                with LOCK, connect() as db:
+                    row = db.execute(
+                        'SELECT secret FROM lists WHERE id=%s',
+                        (lid,)
+                    ).fetchone()
+
+                    if not row or not secrets.compare_digest(row['secret'], key):
+                        return self.reply(404, {'error': 'Invalid invitation'})
+
+                    db.execute(
+                        '''INSERT INTO list_members
+                           (list_id, member_id, name, last_active)
+                           VALUES (%s, %s, %s, %s)
+                           ON CONFLICT (list_id, member_id)
+                           DO UPDATE SET
+                           name=EXCLUDED.name,
+                           last_active=EXCLUDED.last_active''',
+                        (lid, member_id, name, time.time())
+                    )
+
+                return self.reply(200, {'ok': True})
             if u.path == '/api/create':
                 name = str(data.get('name', '')).strip()[:60]
                 if not name:
