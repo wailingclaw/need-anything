@@ -90,7 +90,7 @@ function getList(){return lists[current]}
 async function refresh(silent=true){for(let l of state.links){try{let r=await fetch(`/api/list?id=${encodeURIComponent(l.id)}&key=${encodeURIComponent(l.key)}`,{cache:'no-store'});if(!r.ok)continue;let data=await r.json(),prev=lists[l.id];if ((draggingItem || busy) && l.id === current) continue;
 lists[l.id]=data.list;if(prev&&data.list.events?.length){let old=new Set((prev.events||[]).map(x=>x.id));let added=data.list.events.filter(x=>!old.has(x.id));for(let e of added){if(e.by!==state.person){if(e.type==='start')toast(`${e.by} is shopping! Need anything?`);if(e.type==='lastCall')toast(`🔔 Last call from ${e.by}!`)}}}}catch(e){if(!silent)toast('Unable to connect. Check your internet connection.')}}if (!draggingItem && !busy) render()}
 async function act(action,extra={}){if(busy)return;let l=getLink();if(!l)return;busy=true;try{let result=await api('/api/action',{id:l.id,key:l.key,action,person:state.person||'Someone',senderEndpoint:(await getSenderEndpoint()),...extra});lists[l.id]=result.list;render()}catch(e){toast(e.message);await refresh()}finally{busy=false}}
-function render(){let list=getList();$('home').classList.toggle('hide',!!current);$('detail').classList.toggle('hide',!current);$('lists').innerHTML=state.links.length?state.links.map(l=>{let x=lists[l.id];return `<button class="card listcard" data-open="${escapeHTML(l.id)}"><span><strong>${escapeHTML(x?.name||l.name||'Shared list')}</strong><small>${x?x.items.filter(i=>!i.done).length+' items to get'+(x.shopping?' · 🟢 Shopping now':''):'Connecting…'}</small></span><span>→</span></button>`}).join(''):'<div class="empty">No lists yet. Create your first one! 🛒</div>';
+function render(){updatePushPanel();let list=getList();$('home').classList.toggle('hide',!!current);$('detail').classList.toggle('hide',!current);$('lists').innerHTML=state.links.length?state.links.map(l=>{let x=lists[l.id];return `<button class="card listcard" data-open="${escapeHTML(l.id)}"><span><strong>${escapeHTML(x?.name||l.name||'Shared list')}</strong><small>${x?x.items.filter(i=>!i.done).length+' items to get'+(x.shopping?' · 🟢 Shopping now':''):'Connecting…'}</small></span><span>→</span></button>`}).join(''):'<div class="empty">No lists yet. Create your first one! 🛒</div>';
 if(!current)return;if(!list){$('listTitle').textContent='Connecting…';$('count').textContent='';return}
 $('listTitle').textContent=list.name;$('count').textContent=`${list.items.filter(i=>!i.done).length} left to get`;$('shoppingBanner').classList.toggle('hide',!list.shopping);if(list.shopping)$('shoppingBanner').innerHTML=`<strong>🟢 ${escapeHTML(list.shopping.by)} is shopping!</strong><p>${list.shopping.lastCall?'🔔 Last call! Anything else?':'Need anything? Add it below.'}</p>`;
 $('startShop').classList.toggle('hide',!!list.shopping);$('lastCall').classList.toggle('hide',!list.shopping);$('doneShop').classList.toggle('hide',!list.shopping);$('lastCall').disabled=!!list.shopping?.lastCall;
@@ -151,8 +151,14 @@ async function enableNotifications(){try{
  pushRegistration=await navigator.serviceWorker.ready;
  let sub=await pushRegistration.pushManager.getSubscription();if(!sub)sub=await pushRegistration.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64bytes(config.publicKey)});
  for(const l of state.links)await subscribeList(l);
- $('pushStatus').textContent='Notifications enabled on this device.';$('enablePush').classList.add('hide');toast('Shopping alerts enabled!');
- }catch(e){toast('Could not enable notifications: '+e.message)}}
+ $('pushStatus').textContent='Notifications enabled on this device.';$('enablePush').classList.add('hide');updatePushPanel();toast('Shopping alerts enabled!');
+ }catch(e){toast('Could not enable notifications: '+e.message)}}function updatePushPanel() {
+  $('pushPanel').classList.toggle(
+    'hide',
+    Notification.permission === 'granted' ||
+    Notification.permission === 'denied'
+  );
+}
 $('enablePush').onclick=enableNotifications;
 $('create').onclick=()=>$('createDialog').showModal();
 $('createForm').onsubmit=async e=>{e.preventDefault();let name=$('newListName').value.trim();if(!name)return;try{let r=await api('/api/create',{name});state.links.push({id:r.id,key:r.key,name});save();lists[r.id]=r.list;current=r.id;if(Notification.permission==='granted')subscribeList(state.links[state.links.length-1]).catch(()=>{});$('createDialog').close();$('newListName').value='';render()}catch(e){toast(e.message)}};
@@ -239,7 +245,7 @@ $('lastCall').onclick=()=>{playDing();act('lastCall')};
 $('doneShop').onclick=()=>act('done');
 
 $('deleteList').textContent='Leave this shared list';$('deleteList').onclick=()=>{if(confirm('Remove this list from your device? Others can still use it.')){const departing=getLink();getSenderEndpoint().then(endpoint=>endpoint&&api('/api/unsubscribe',{id:departing.id,key:departing.key,endpoint})).catch(()=>{});state.links=state.links.filter(l=>l.id!==current);delete lists[current];current=null;save();render()}};
-$('share').onclick=async()=>{let l=getLink();if(!l)return;let url=linkFor(l);try{if(navigator.share)await navigator.share({title:'Need Anything?',text:'Join my shopping list!',url});else if(navigator.clipboard){await navigator.clipboard.writeText(url);toast('Invitation link copied!')}else prompt('Copy this private invitation link:',url)}catch(e){if(e.name!=='AbortError')prompt('Copy this private invitation link:',url)}};$('enablePush').classList.toggle('hide', Notification.permission === 'granted');
+$('share').onclick=async()=>{let l=getLink();if(!l)return;let url=linkFor(l);try{if(navigator.share)await navigator.share({title:'Need Anything?',text:'Join my shopping list!',url});else if(navigator.clipboard){await navigator.clipboard.writeText(url);toast('Invitation link copied!')}else prompt('Copy this private invitation link:',url)}catch(e){if(e.name!=='AbortError')prompt('Copy this private invitation link:',url)}};$('enablePush').classList.toggle('hide', Notification.permission === 'granted');updatePushPanel();
 async function init(){let q=new URLSearchParams(location.search),id=q.get('list'),key=q.get('key');if(id&&key&&!state.links.some(l=>l.id===id)){state.links.push({id,key,name:'Shared list'});save()}if(id&&key){current=id;history.replaceState({},'',location.pathname)}if('serviceWorker' in navigator && window.isSecureContext){try{pushRegistration=await navigator.serviceWorker.register('/sw.js')}catch(e){console.warn('Service worker unavailable')}}
 if(!state.person)$('nameDialog').showModal();render();await refresh(false);
 if(pushRegistration&&Notification.permission==='granted'){for(const l of state.links)subscribeList(l).catch(()=>{});$('pushStatus').textContent='Notifications enabled on this device.'}
