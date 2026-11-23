@@ -269,10 +269,15 @@ $('nameForm').onsubmit=async e=>{
   }
 };
 $('back').onclick=()=>{current=null;render()};
+
 $('lists').onclick=e=>{
   let b=e.target.closest('[data-open]');
   if(b){
     current=b.dataset.open;
+    seenEvents[current] = (lists[current]?.events || [])
+      .filter(event => event.type === 'add' || event.type === 'start')
+      .map(event => event.id);
+    saveSeenEvents();
     render();
     updateMemberActivity();
     loadMembers();
