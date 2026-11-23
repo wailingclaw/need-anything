@@ -330,7 +330,12 @@ class Handler(SimpleHTTPRequestHandler):
                             'done': False,
                             'addedDuring': shop['id'] if shop else None
                         })
-
+                        obj['events'].append({
+                            'id': token(),
+                            'type': 'add',
+                            'by': person,
+                            'at': now
+                        })
                     elif action == 'reorder':
                         order = data.get('order')
 
