@@ -230,7 +230,7 @@ lists[l.id].updatedAt=data.version;
 
 if (current === l.id) {
   seenEvents[l.id] = (data.list.events || [])
-    .filter(event => event.type === 'add' || event.type === 'start')
+.filter(isListUpdate)
     .map(event => event.id);
   saveSeenEvents();
 }
@@ -240,16 +240,57 @@ if(prev&&data.list.events?.length){let old=new Set((prev.events||[]).map(x=>x.id
   } finally {
     refreshInProgress = false;
   }
+}function isListUpdate(event) {
+  return [
+    'add',
+    'check',
+    'remove',
+    'reorder',
+    'rename',
+    'start',
+    'lastCall',
+    'done'
+  ].includes(event.type);
 }
+
+function isOtherMember(event) {
+  if (event.memberId) {
+    return event.memberId !== memberId;
+  }
+
+  return event.by !== state.person;
+}
+function isListUpdate(event) {
+  return [
+    'add',
+    'check',
+    'remove',
+    'reorder',
+    'rename',
+    'start',
+    'lastCall',
+    'done'
+  ].includes(event.type);
+}
+
+function isOtherMember(event) {
+  if (event.memberId) {
+    return event.memberId !== memberId;
+  }
+
+  return event.by !== state.person;
+}
+
 function hasNewActivity(listId) {
   const list = lists[listId];
+
   if (!list) return false;
 
   const seen = seenEvents[listId] || [];
 
   return (list.events || []).some(event =>
-    (event.type === 'add' || event.type === 'start') &&
-    event.by !== state.person &&
+    isListUpdate(event) &&
+    isOtherMember(event) &&
     !seen.includes(event.id)
   );
 }
@@ -492,7 +533,12 @@ $('nameForm').onsubmit=async e=>{
     leavingList = false;
   }
 }
-$('back').onclick=()=>{current=null;render()};
+$('back').onclick = () => {
+  current = null;
+  render();
+  refresh();
+};
+
 
 $('lists').onclick=e=>{
   let close=e.target.closest('[data-close]');
@@ -509,7 +555,7 @@ current=b.dataset.open;
 $('membersHeading').textContent = '👥 Members';
 $('membersList').innerHTML = '<p class="muted" style="font-size:13px">Loading members...</p>';
     seenEvents[current] = (lists[current]?.events || [])
-      .filter(event => event.type === 'add' || event.type === 'start')
+.filter(isListUpdate)
       .map(event => event.id);
     saveSeenEvents();
     render();
