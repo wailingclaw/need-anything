@@ -52,9 +52,9 @@ function playDing() {
 }
 </script>
 </head>
-<body><main class="wrap"><header class="brand"><div class="logo"><img src="/needanything-logo.png" alt="Need Anything? logo" style="width:42px;height:42px;object-fit:contain;display:block"></div><div><h1>Need Anything?</h1><p class="muted">Shopping is better together.</p></div></header><div id="toast" class="notice hide" role="status"></div><section id="home"><div class="top"><h2>Your lists</h2><button class="primary" id="create">+ New list</button></div><div id="lists"></div><p class="footer">No accounts. No ads. Share a private invitation link to shop together.</p></section><section id="detail" class="hide"><button class="back" id="back">← All lists</button><div class="top"><div><h2 id="listTitle"></h2><p class="muted" id="count"></p></div><button class="outline" id="share">Invite ↗</button></div><div class="card" id="pushPanel"><strong>Shopping alerts</strong><p class="muted" style="font-size:13px">Get alerts when someone starts shopping or sends a last call.</p><button id="enablePush" class="outline full">Enable notifications</button><p class="muted" id="pushStatus" style="font-size:12px"></p></div>
+<body><main class="wrap"><header class="brand"><div class="logo"><img src="/needanything-logo.png" alt="Need Anything? logo" style="width:42px;height:42px;object-fit:contain;display:block"></div><div><h1>Need Anything?</h1><p class="muted">Shopping is better together.</p></div></header><div id="toast" class="notice hide" role="status"></div><section id="home"><div class="top"><h2>My Lists</h2><button class="primary" id="create">+ New List</button></div><div id="lists"></div><p class="footer">No accounts. No ads. Share a private invitation link to shop together.</p></section><section id="detail" class="hide"><button class="back" id="back">← All lists</button><div class="top"><div><h2 id="listTitle"></h2><p class="muted" id="count"></p></div><button class="outline" id="share">Invite ↗</button></div><div class="card" id="pushPanel"><strong>Shopping alerts</strong><p class="muted" style="font-size:13px">Get alerts when someone starts shopping or sends a last call.</p><button id="enablePush" class="outline full">Enable notifications</button><p class="muted" id="pushStatus" style="font-size:12px"></p></div>
 <div class="card" id="membersPanel">
-  <strong>👥 Members</strong>
+<strong id="membersHeading">👥 Members</strong>
   <div id="membersList">
     <p class="muted" style="font-size:13px">Loading members...</p>
   </div>
@@ -109,7 +109,9 @@ async function loadMembers() {
 
     if (current !== link.id) return;
 
-    const members = data.members || [];
+const members = data.members || [];
+
+$('membersHeading').textContent = `👥 Members (${members.length})`;
 
     $('membersList').innerHTML = members.length
       ? members.map(m => {
@@ -289,7 +291,9 @@ async function enableNotifications(){try{
 }
 $('enablePush').onclick=enableNotifications;
 $('create').onclick=()=>$('createDialog').showModal();
-$('createForm').onsubmit=async e=>{e.preventDefault();let name=$('newListName').value.trim();if(!name)return;try{let r=await api('/api/create',{name});state.links.push({id:r.id,key:r.key,name});save();lists[r.id]=r.list;current=r.id;if(notificationPermission()==='granted')subscribeList(state.links[state.links.length-1]).catch(()=>{});$('createDialog').close();$('newListName').value='';render();await updateMemberActivity();loadMembers()}catch(e){toast(e.message)}};
+$('createForm').onsubmit=async e=>{e.preventDefault();let name=$('newListName').value.trim();if(!name)return;try{let r=await api('/api/create',{name});state.links.push({id:r.id,key:r.key,name});save();lists[r.id]=r.list;current=r.id;
+$('membersHeading').textContent = '👥 Members';
+$('membersList').innerHTML = '<p class="muted" style="font-size:13px">Loading members...</p>';if(notificationPermission()==='granted')subscribeList(state.links[state.links.length-1]).catch(()=>{});$('createDialog').close();$('newListName').value='';render();await updateMemberActivity();loadMembers()}catch(e){toast(e.message)}};
 $('nameForm').onsubmit=async e=>{
   e.preventDefault();
   let n=$('personName').value.trim();
@@ -320,7 +324,9 @@ $('lists').onclick=e=>{
   }
   let b=e.target.closest('[data-open]');
   if(b){
-    current=b.dataset.open;
+current=b.dataset.open;
+$('membersHeading').textContent = '👥 Members';
+$('membersList').innerHTML = '<p class="muted" style="font-size:13px">Loading members...</p>';
     seenEvents[current] = (lists[current]?.events || [])
       .filter(event => event.type === 'add' || event.type === 'start')
       .map(event => event.id);
