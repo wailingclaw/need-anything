@@ -57,6 +57,67 @@
 
 .language-switch[aria-checked="true"] .language-knob {
   transform: translateX(18px);
+}/* Saved Items */
+.saved-toggle {
+  flex: none;
+  padding: 10px 12px;
+  font-size: 23px;
+  background: white;
+  border: 1px solid #ddd;
+  color: #777;
+}
+
+.saved-toggle.active {
+  color: #b88b20;
+  background: #fff9e8;
+  border-color: #e8d59c;
+}
+
+.saved-panel {
+  padding: 14px;
+}
+
+.saved-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.saved-header button {
+  padding: 6px 10px;
+  font-size: 13px;
+}
+
+.saved-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 14px 0;
+}
+
+.saved-chip {
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 30px;
+  padding: 8px 13px;
+  font-size: 14px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+  max-width: 100%;
+}
+
+.saved-chip.delete-mode {
+  color: #a22;
+}
+
+.saved-panel .muted {
+  font-size: 12px;
+}
+
+.saved-panel input {
+  width: 100%;
+  min-width: 0;
 }
 </style>
 <script>
@@ -106,10 +167,48 @@ function playDing() {
   <div id="membersList">
     <p class="muted" style="font-size:13px">Loading members...</p>
   </div>
-</div><div id="shoppingBanner" class="card shopping hide"></div><div class="actions"><button class="primary" id="startShop">🛒 I'm Shopping!</button><button id="lastCall" class="hide">🔔 Last Call!</button><button id="doneShop" class="hide">✓ Done Shopping</button></div><form id="addForm" class="row"><input id="itemName" aria-label="Item name" placeholder="Add an item…" maxlength="100" required><input id="qty" aria-label="Quantity" placeholder="Qty" style="max-width:76px" maxlength="20"><button class="primary" type="submit">+</button></form><div class="history">
+</div><div id="shoppingBanner" class="card shopping hide"></div><div class="actions"><button class="primary" id="startShop">🛒 I'm Shopping!</button><button id="lastCall" class="hide">🔔 Last Call!</button><button id="doneShop" class="hide">✓ Done Shopping</button></div><form id="addForm" class="row"><input id="itemName" aria-label="Item name" placeholder="Add an item…" maxlength="100" required><input id="qty" aria-label="Quantity" placeholder="Qty" style="max-width:76px" maxlength="20"><button type="button"
+        id="savedToggle"
+        class="saved-toggle"
+        aria-label="Saved Items"
+        aria-expanded="false"
+        aria-controls="savedPanel">☆</button>
+
+<button class="primary" type="submit">+</button>
+</form>
+
+<div id="savedPanel" class="card saved-panel hide">
+
+  <div class="saved-header">
+    <strong id="savedHeading">⭐ Saved Items</strong>
+
+    <div>
+      <button type="button" id="savedEdit">Edit</button>
+      <button type="button" id="savedClose"
+              aria-label="Close">✕</button>
+    </div>
+  </div>
+
+  <div id="savedChips" class="saved-chips"></div>
+
+  <p id="savedHint" class="muted">
+    Tap an item to add it to your list.
+  </p>
+
+  <form id="savedForm" class="row hide">
+    <input id="savedName"
+           placeholder="Save a new item…"
+           maxlength="100"
+           required>
+
+    <button type="submit" class="primary"
+            id="savedAdd">Save</button>
+  </form>
+
+</div><div class="history">
   <h2 id="needToGetHeading">Need to get</h2>
   <div id="items" class="card"></div>
-</div><div class="history"><h2>Got it ✓</h2><div id="completed" class="card"></div></div><button id="deleteList" class="outline full" style="margin-top:28px;color:#a22">Delete this list</button></section></main><dialog id="nameDialog"><form method="dialog" id="nameForm" class="stack"><h2>What's your name?</h2><p class="muted" style="margin:0">We'll use this to show who's shopping.</p><input id="personName" placeholder="Your first name" required maxlength="40"><button class="primary" value="save">Continue</button></form></dialog><dialog id="createDialog"><form method="dialog" id="createForm" class="stack"><h2>New shopping list</h2><input id="newListName" placeholder="e.g. Groceries" required maxlength="60"><button class="primary" value="save">Create list</button><button type="button" value="cancel"
+</div><div class="history"><h2 id="completedHeading">Got it ✓</h2><div id="completed" class="card"></div></div><button id="deleteList" class="outline full" style="margin-top:28px;color:#a22">Delete this list</button></section></main><dialog id="nameDialog"><form method="dialog" id="nameForm" class="stack"><h2>What's your name?</h2><p class="muted" style="margin:0">We'll use this to show who's shopping.</p><input id="personName" placeholder="Your first name" required maxlength="40"><button class="primary" value="save">Continue</button></form></dialog><dialog id="createDialog"><form method="dialog" id="createForm" class="stack"><h2>New shopping list</h2><input id="newListName" placeholder="e.g. Groceries" required maxlength="60"><button class="primary" value="save">Create list</button><button type="button" value="cancel"
   onclick="document.getElementById('createDialog').close()">
   Cancel
 </button></form></dialog><script>
@@ -264,7 +363,7 @@ function applyLanguage() {
     '#doneShop': 'doneShopping',
     '#items': null,
     '#completed': null,
-    '.history h2': 'gotIt',
+    '#completedHeading': 'gotIt',
     '#deleteList': 'leaveList',
     '#pushPanel strong': 'alerts',
     '#pushPanel p': 'alertsDescription',
@@ -314,6 +413,7 @@ $('languageSwitch').onclick = () => {
   localStorage.setItem(LANGUAGE_KEY, language);
 
   applyLanguage();
+  renderSavedItems();
   render();
   loadMembers();
 };
@@ -327,7 +427,223 @@ if (!memberId) {
   localStorage.setItem('need-anything-member-id', memberId);
 }let state={person:saved.person||'',links:Array.isArray(saved.links)?saved.links:[]},current=null,lists={},lastEvents={},busy=false;
 const save=()=>localStorage.setItem(KEY,JSON.stringify(state));
+// Saved Items
+const SAVED_ITEMS_KEY = 'need-anything-saved-items';
 
+let savedItems = [];
+let savedEditing = false;
+
+try {
+  const stored = JSON.parse(
+    localStorage.getItem(SAVED_ITEMS_KEY) || '[]'
+  );
+
+  if (Array.isArray(stored)) {
+    savedItems = stored.filter(item =>
+      item &&
+      typeof item.id === 'string' &&
+      typeof item.name === 'string'
+    );
+  }
+} catch {
+  savedItems = [];
+}
+
+function persistSavedItems(nextItems) {
+  try {
+    localStorage.setItem(
+      SAVED_ITEMS_KEY,
+      JSON.stringify(nextItems)
+    );
+
+    savedItems = nextItems;
+    return true;
+
+  } catch {
+    toast(language === 'es'
+      ? 'No se pudieron guardar los artículos.'
+      : 'Could not save your items.');
+
+    return false;
+  }
+}
+
+function renderSavedItems() {
+  const es = language === 'es';
+
+  $('savedHeading').textContent =
+    es ? '⭐ Artículos guardados' : '⭐ Saved Items';
+
+  $('savedEdit').textContent = savedEditing
+    ? (es ? 'Listo' : 'Done')
+    : (es ? 'Editar' : 'Edit');
+
+  $('savedToggle').setAttribute(
+    'aria-label',
+    es ? 'Artículos guardados' : 'Saved Items'
+  );
+
+  $('savedClose').setAttribute(
+    'aria-label',
+    es ? 'Cerrar' : 'Close'
+  );
+
+  $('savedName').placeholder =
+    es ? 'Guardar un artículo…' : 'Save a new item…';
+
+  $('savedAdd').textContent =
+    es ? 'Guardar' : 'Save';
+
+  $('savedForm').classList.toggle(
+    'hide',
+    !savedEditing
+  );
+
+  $('savedHint').textContent = savedEditing
+    ? (es
+        ? 'Toca un artículo para eliminarlo.'
+        : 'Tap an item to delete it.')
+    : (es
+        ? 'Toca un artículo para añadirlo a tu lista.'
+        : 'Tap an item to add it to your list.');
+
+  const container = $('savedChips');
+  container.replaceChildren();
+
+  if (!savedItems.length) {
+    const empty = document.createElement('p');
+
+    empty.className = 'muted';
+
+    empty.textContent = es
+      ? 'Aún no tienes artículos guardados.'
+      : 'No saved items yet. Tap Edit to add one.';
+
+    container.appendChild(empty);
+    return;
+  }
+
+  for (const item of savedItems) {
+    const button = document.createElement('button');
+
+    button.type = 'button';
+    button.className = 'saved-chip';
+
+    if (savedEditing) {
+      button.classList.add('delete-mode');
+    }
+
+    button.textContent = savedEditing
+      ? item.name + ' ✕'
+      : '+ ' + item.name;
+
+    button.onclick = async () => {
+      if (savedEditing) {
+        const nextItems = savedItems.filter(
+          i => i.id !== item.id
+        );
+
+        if (persistSavedItems(nextItems)) {
+          renderSavedItems();
+        }
+
+        return;
+      }
+
+      if (busy || !getList()) return;
+
+      const success = await act('add', {
+        name: item.name,
+        qty: item.qty || ''
+      });
+
+      if (success) {
+        closeSavedItems();
+      }
+    };
+
+    container.appendChild(button);
+  }
+}
+
+function closeSavedItems() {
+  savedEditing = false;
+
+  $('savedPanel').classList.add('hide');
+  $('savedToggle').classList.remove('active');
+  $('savedToggle').textContent = '☆';
+
+  $('savedToggle').setAttribute(
+    'aria-expanded',
+    'false'
+  );
+
+  $('savedForm').reset();
+}
+
+$('savedToggle').onclick = () => {
+  if (!$('savedPanel').classList.contains('hide')) {
+    closeSavedItems();
+    return;
+  }
+
+  savedEditing = false;
+
+  $('savedPanel').classList.remove('hide');
+  $('savedToggle').classList.add('active');
+  $('savedToggle').textContent = '★';
+
+  $('savedToggle').setAttribute(
+    'aria-expanded',
+    'true'
+  );
+
+  renderSavedItems();
+};
+
+$('savedClose').onclick = closeSavedItems;
+
+$('savedEdit').onclick = () => {
+  savedEditing = !savedEditing;
+  renderSavedItems();
+};
+
+$('savedForm').onsubmit = e => {
+  e.preventDefault();
+
+  const name = $('savedName').value.trim();
+
+  if (!name) return;
+
+  const duplicate = savedItems.some(item =>
+    item.name.toLowerCase() === name.toLowerCase()
+  );
+
+  if (duplicate) {
+    toast(language === 'es'
+      ? 'Este artículo ya está guardado.'
+      : 'This item is already saved.');
+
+    return;
+  }
+
+  const nextItems = [
+    ...savedItems,
+    {
+      id: crypto.randomUUID(),
+      name,
+      qty: '',
+      photo: null
+    }
+  ];
+
+  if (persistSavedItems(nextItems)) {
+    $('savedForm').reset();
+    renderSavedItems();
+  }
+};
+
+renderSavedItems();
 const ACTIVE_LIST_KEY = 'need-anything-active-list';
 
 function rememberActiveList() {
@@ -792,6 +1108,7 @@ $('nameForm').onsubmit=async e=>{
   }
 }
 $('back').onclick = () => {
+  closeSavedItems();
   current = null;
   render();
   refresh();
