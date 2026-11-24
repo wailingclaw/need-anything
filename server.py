@@ -6,6 +6,7 @@ from urllib.parse import urlparse, parse_qs
 import json, secrets, time, os, threading, logging
 import psycopg
 from psycopg.rows import dict_row
+from psycopg_pool import ConnectionPool
 from concurrent.futures import ThreadPoolExecutor
 
 PUSH_POOL = ThreadPoolExecutor(max_workers=3)
@@ -13,11 +14,37 @@ ROOT = Path(__file__).resolve().parent
 LOCK = threading.RLock()
 
 
-def connect():
+DB_POOL = None
+
+
+def init_pool():
+    global DB_POOL
+
     url = os.environ.get('DATABASE_URL', '')
+
     if not url:
-        raise RuntimeError('DATABASE_URL is missing from Render environment variables')
-    return psycopg.connect(url, row_factory=dict_row, connect_timeout=15)
+        raise RuntimeError(
+            'DATABASE_URL is missing from Render environment variables'
+        )
+
+    DB_POOL = ConnectionPool(
+        conninfo=url,
+        min_size=1,
+        max_size=3,
+        timeout=15,
+        kwargs={
+            'row_factory': dict_row,
+            'connect_timeout': 15
+        },
+        open=False
+    )
+
+    DB_POOL.open()
+    DB_POOL.wait(timeout=30)
+
+
+def connect():
+    return DB_POOL.connection()
 
 
 def init():
@@ -449,6 +476,7 @@ class Handler(SimpleHTTPRequestHandler):
 
 
 if __name__ == '__main__':
+    init_pool()
     init()
     port = int(os.environ.get('PORT', '8000'))
     print(f'Need Anything? running on port {port}', flush=True)
