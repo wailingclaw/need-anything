@@ -21,7 +21,43 @@
   opacity: 0.45;
   background: #eaffdf;
 }
+/* Language switch */
+.brand {
+  flex-wrap: wrap;
+}
 
+.language-switch {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: auto;
+  padding: 6px 0;
+  background: transparent;
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.language-track {
+  display: block;
+  width: 42px;
+  height: 24px;
+  padding: 3px;
+  border-radius: 30px;
+  background: #39ff14;
+}
+
+.language-knob {
+  display: block;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #171717;
+  transition: transform 0.2s ease;
+}
+
+.language-switch[aria-checked="true"] .language-knob {
+  transform: translateX(18px);
+}
 </style>
 <script>
 function playDing() {
@@ -52,7 +88,19 @@ function playDing() {
 }
 </script>
 </head>
-<body><main class="wrap"><header class="brand"><div class="logo"><img src="/needanything-logo.png" alt="Need Anything? logo" style="width:42px;height:42px;object-fit:contain;display:block"></div><div><h1>Need Anything?</h1><p class="muted">Shopping is better together.</p></div></header><div id="toast" class="notice hide" role="status"></div><section id="home"><div class="top"><h2>My Lists</h2><button class="primary" id="create">+ New List</button></div><div id="lists"></div><p class="footer">No accounts. No ads. Share a private invitation link to shop together.</p></section><section id="detail" class="hide"><button class="back" id="back">← My Lists</button><div class="top"><div><h2 id="listTitle"></h2><p class="muted" id="count"></p></div><button class="outline" id="share">Invite ↗</button></div><div class="card" id="pushPanel"><strong>Shopping alerts</strong><p class="muted" style="font-size:13px">Get alerts when someone starts shopping or sends a last call.</p><button id="enablePush" class="outline full">Enable notifications</button><p class="muted" id="pushStatus" style="font-size:12px"></p></div>
+<body><main class="wrap"><header class="brand"><div class="logo"><img src="/needanything-logo.png" alt="Need Anything? logo" style="width:42px;height:42px;object-fit:contain;display:block"></div><div><h1>Need Anything?</h1><p class="muted">Shopping is better together.</p></div><button type="button"
+        id="languageSwitch"
+        class="language-switch"
+        role="switch"
+        aria-label="Español"
+        aria-checked="false">
+  <span>EN</span>
+  <span class="language-track">
+    <span class="language-knob"></span>
+  </span>
+  <span>ES</span>
+</button>
+</header><div id="toast" class="notice hide" role="status"></div><section id="home"><div class="top"><h2>My Lists</h2><button class="primary" id="create">+ New List</button></div><div id="lists"></div><p class="footer">No accounts. No ads. Share a private invitation link to shop together.</p></section><section id="detail" class="hide"><button class="back" id="back">← My Lists</button><div class="top"><div><h2 id="listTitle"></h2><p class="muted" id="count"></p></div><button class="outline" id="share">Invite ↗</button></div><div class="card" id="pushPanel"><strong>Shopping alerts</strong><p class="muted" style="font-size:13px">Get alerts when someone starts shopping or sends a last call.</p><button id="enablePush" class="outline full">Enable notifications</button><p class="muted" id="pushStatus" style="font-size:12px"></p></div>
 <div class="card" id="membersPanel">
 <strong id="membersHeading">👥 Members</strong>
   <div id="membersList">
@@ -60,7 +108,58 @@ function playDing() {
   </div>
 </div><div id="shoppingBanner" class="card shopping hide"></div><div class="actions"><button class="primary" id="startShop">🛒 I'm Shopping!</button><button id="lastCall" class="hide">🔔 Last Call!</button><button id="doneShop" class="hide">✓ Done Shopping</button></div><form id="addForm" class="row"><input id="itemName" aria-label="Item name" placeholder="Add an item…" maxlength="100" required><input id="qty" aria-label="Quantity" placeholder="Qty" style="max-width:76px" maxlength="20"><button class="primary" type="submit">+</button></form><div class="card"><strong>Need to get</strong><div id="items"></div></div><div class="history"><h2>Got it ✓</h2><div id="completed" class="card"></div></div><button id="deleteList" class="outline full" style="margin-top:28px;color:#a22">Delete this list</button></section></main><dialog id="nameDialog"><form method="dialog" id="nameForm" class="stack"><h2>What's your name?</h2><p class="muted" style="margin:0">We'll use this to show who's shopping.</p><input id="personName" placeholder="Your first name" required maxlength="40"><button class="primary" value="save">Continue</button></form></dialog><dialog id="createDialog"><form method="dialog" id="createForm" class="stack"><h2>New shopping list</h2><input id="newListName" placeholder="e.g. Groceries" required maxlength="60"><button class="primary" value="save">Create list</button><button value="cancel">Cancel</button></form></dialog><script>
 const KEY='need-anything-v2', $=id=>document.getElementById(id);
-const notificationPermission = () =>
+// Language preference
+const LANGUAGE_KEY = 'need-anything-language';
+
+let language =
+  localStorage.getItem(LANGUAGE_KEY) === 'es'
+    ? 'es'
+    : 'en';
+
+const translations = {
+  en: {
+    tagline: 'Shopping is better together.',
+    myLists: 'My Lists',
+    newList: '+ New List',
+    back: '← My Lists'
+  },
+  es: {
+    tagline: 'Comprar es mejor juntos.',
+    myLists: 'Mis listas',
+    newList: '+ Nueva lista',
+    back: '← Mis listas'
+  }
+};
+
+function applyLanguage() {
+  const words = translations[language];
+
+  document.documentElement.lang = language;
+
+  $('languageSwitch').setAttribute(
+    'aria-checked',
+    String(language === 'es')
+  );
+
+  document.querySelector('.brand p').textContent =
+    words.tagline;
+
+  document.querySelector('#home .top h2').textContent =
+    words.myLists;
+
+  $('create').textContent = words.newList;
+  $('back').textContent = words.back;
+}
+
+$('languageSwitch').onclick = () => {
+  language = language === 'en' ? 'es' : 'en';
+
+  localStorage.setItem(LANGUAGE_KEY, language);
+
+  applyLanguage();
+};
+
+applyLanguage();const notificationPermission = () =>
   ('Notification' in window) ? Notification.permission : 'unsupported';let saved={};try{saved=JSON.parse(localStorage.getItem(KEY))||{}}catch{};
 let pushRegistration=null;
 let memberId = localStorage.getItem('need-anything-member-id');
