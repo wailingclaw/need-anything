@@ -69,6 +69,16 @@ if (!memberId) {
   localStorage.setItem('need-anything-member-id', memberId);
 }let state={person:saved.person||'',links:Array.isArray(saved.links)?saved.links:[]},current=null,lists={},lastEvents={},busy=false;
 const save=()=>localStorage.setItem(KEY,JSON.stringify(state));
+
+const ACTIVE_LIST_KEY = 'need-anything-active-list';
+
+function rememberActiveList() {
+  if (current) {
+    sessionStorage.setItem(ACTIVE_LIST_KEY, current);
+  } else {
+    sessionStorage.removeItem(ACTIVE_LIST_KEY);
+  }
+}
 const SEEN_KEY = 'need-anything-seen-events';
 let seenEvents = {};
 try {
@@ -98,10 +108,11 @@ async function loadMembers() {
   if (!link || document.hidden) return;
 
   try {
-    const response = await fetch(
-      '/api/members?id=' + encodeURIComponent(link.id) +
-      '&key=' + encodeURIComponent(link.key)
-    );
+const response = await fetch(
+  '/api/members?id=' + encodeURIComponent(link.id) +
+  '&key=' + encodeURIComponent(link.key),
+  { cache: 'no-store' }
+);
 
     if (!response.ok) throw new Error('Could not load members');
 
@@ -220,8 +231,14 @@ seenEvents[l.id] = (result.list.events || [])
   .map(event => event.id);
 saveSeenEvents();
 render()}catch(e){toast(e.message);await refresh()}finally{busy=false}}
-function render(){updatePushPanel();let list=getList();$('home').classList.toggle('hide',!!current);$('detail').classList.toggle('hide',!current);$('lists').innerHTML=state.links.length?state.links.map(l=>{let x=lists[l.id];return `<div class="card listcard" data-open="${escapeHTML(l.id)}" role="button" tabindex="0" style="cursor:pointer"><span><strong>${escapeHTML(x?.name||l.name||'Shared list')}</strong>${hasNewActivity(l.id)?'<span style="display:inline-block;background:#22c55e;color:#fff;font-size:10px;font-weight:800;padding:3px 7px;border-radius:20px;margin-left:8px;vertical-align:middle">NEW</span>':''}<small>${x?x.items.filter(i=>!i.done).length+' items to get'+(x.shopping?' · 🟢 Shopping now':''):'Connecting…'}</small>${x?.updatedAt?`<small>Updated ${timeAgo(x.updatedAt)}</small>`:''}</span><span class="remove-list" data-close="${escapeHTML(l.id)}" title="Remove list" role="button" tabindex="0" aria-label="Remove list">✕</span></div>`}).join(''):'<div class="empty">No lists yet. Create your first one! 🛒</div>';
-if(!current)return;if(!list){$('listTitle').textContent='Connecting…';$('count').textContent='';return}
+function render(){rememberActiveList();updatePushPanel();let list=getList();$('home').classList.toggle('hide',!!current);$('detail').classList.toggle('hide',!current);$('lists').innerHTML=state.links.length?state.links.map(l=>{let x=lists[l.id];return `<div class="card listcard" data-open="${escapeHTML(l.id)}" role="button" tabindex="0" style="cursor:pointer"><span><strong>${escapeHTML(x?.name||l.name||'Shared list')}</strong>${hasNewActivity(l.id)?'<span style="display:inline-block;background:#22c55e;color:#fff;font-size:10px;font-weight:800;padding:3px 7px;border-radius:20px;margin-left:8px;vertical-align:middle">NEW</span>':''}<small>${x?x.items.filter(i=>!i.done).length+' items to get'+(x.shopping?' · 🟢 Shopping now':''):'Connecting…'}</small>${x?.updatedAt?`<small>Updated ${timeAgo(x.updatedAt)}</small>`:''}</span><span class="remove-list" data-close="${escapeHTML(l.id)}" title="Remove list" role="button" tabindex="0" aria-label="Remove list">✕</span></div>`}).join(''):'<div class="empty">No lists yet. Create your first one! 🛒</div>';
+if (!current) return;
+
+if (!list) {
+  $('listTitle').textContent = 'Loading list…';
+  $('count').textContent = '';
+  return;
+}
 $('listTitle').textContent=list.name;$('count').textContent=`${list.items.filter(i=>!i.done).length} left to get`;$('shoppingBanner').classList.toggle('hide',!list.shopping);if(list.shopping)$('shoppingBanner').innerHTML=`<strong>🟢 ${escapeHTML(list.shopping.by)} is shopping!</strong><p>${list.shopping.lastCall?'🔔 Last call! Anything else?':'Need anything? Add it below.'}</p>`;
 $('startShop').classList.toggle('hide',!!list.shopping);$('lastCall').classList.toggle('hide',!list.shopping);$('doneShop').classList.toggle('hide',!list.shopping);$('lastCall').disabled=!!list.shopping?.lastCall;
 
@@ -431,7 +448,16 @@ $('doneShop').onclick=()=>act('done');
 
 $('deleteList').textContent='Leave this shared list';$('deleteList').onclick=()=>{if(confirm('Remove this list from your device? Others can still use it.')){const departing=getLink();getSenderEndpoint().then(endpoint=>endpoint&&api('/api/unsubscribe',{id:departing.id,key:departing.key,endpoint})).catch(()=>{});state.links=state.links.filter(l=>l.id!==current);delete lists[current];current=null;save();render()}};
 $('share').onclick=async()=>{let l=getLink();if(!l)return;let url=linkFor(l);try{if(navigator.share)await navigator.share({title:'Need Anything?',text:'Join my shopping list!',url});else if(navigator.clipboard){await navigator.clipboard.writeText(url);toast('Invitation link copied!')}else prompt('Copy this private invitation link:',url)}catch(e){if(e.name!=='AbortError')prompt('Copy this private invitation link:',url)}};$('enablePush').classList.toggle('hide', notificationPermission() === 'granted');updatePushPanel();
-async function init(){let q=new URLSearchParams(location.search),id=q.get('list'),key=q.get('key');if(id&&key&&!state.links.some(l=>l.id===id)){state.links.push({id,key,name:'Shared list'});save()}if(id&&key){current=id;history.replaceState({},'',location.pathname)}if('serviceWorker' in navigator && window.isSecureContext){try{pushRegistration=await navigator.serviceWorker.register('/sw.js')}catch(e){console.warn('Service worker unavailable')}}
+async function init(){let q=new URLSearchParams(location.search),id=q.get('list'),key=q.get('key');if(id&&key&&!state.links.some(l=>l.id===id)){state.links.push({id,key,name:'Shared list'});save()}if (id && key) {
+  current = id;
+  history.replaceState({}, '', location.pathname);
+} else {
+  const rememberedList = sessionStorage.getItem(ACTIVE_LIST_KEY);
+
+  if (rememberedList && state.links.some(l => l.id === rememberedList)) {
+    current = rememberedList;
+  }
+}if('serviceWorker' in navigator && window.isSecureContext){try{pushRegistration=await navigator.serviceWorker.register('/sw.js')}catch(e){console.warn('Service worker unavailable')}}
 if(!state.person)$('nameDialog').showModal();render();await refresh(false);
 if(pushRegistration&&notificationPermission()==='granted'){for(const l of state.links)subscribeList(l).catch(()=>{});$('pushStatus').textContent='Notifications enabled on this device.'}
 $('enablePush').classList.toggle('hide', notificationPermission() === 'granted');
