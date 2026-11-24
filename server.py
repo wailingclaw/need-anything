@@ -302,7 +302,44 @@ class Handler(SimpleHTTPRequestHandler):
                     )
 
                 return self.reply(200, {'ok': True})
+            if u.path == '/api/leave':
+                lid = str(data.get('id', ''))
+                key = str(data.get('key', ''))
+                member_id = str(data.get('memberId', ''))[:100]
+                endpoint = str(data.get('endpoint', ''))
 
+                if not member_id:
+                    return self.reply(400, {
+                        'error': 'Member ID required'
+                    })
+
+                with LOCK, connect() as db:
+                    row = db.execute(
+                        'SELECT secret FROM lists WHERE id=%s',
+                        (lid,)
+                    ).fetchone()
+
+                    if not row or not secrets.compare_digest(
+                        row['secret'], key
+                    ):
+                        return self.reply(404, {
+                            'error': 'Invalid invitation'
+                        })
+
+                    db.execute(
+                        '''DELETE FROM list_members
+                           WHERE list_id=%s AND member_id=%s''',
+                        (lid, member_id)
+                    )
+
+                    if endpoint:
+                        db.execute(
+                            '''DELETE FROM subscriptions
+                               WHERE list_id=%s AND endpoint=%s''',
+                            (lid, endpoint)
+                        )
+
+                return self.reply(200, {'ok': True})
             if u.path == '/api/unsubscribe':
                 lid = str(data.get('id', ''))
                 key = str(data.get('key', ''))
