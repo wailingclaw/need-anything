@@ -114,6 +114,7 @@ await memberActivityRequest;
 } finally {
   memberActivityRequest = null;
 }
+}
 
 async function loadMembers() {
   const link = state.links.find(l => l.id === current);
@@ -221,7 +222,7 @@ for (let l of linksToRefresh) {const requestRevision = actionRevision;try{let r=
 
 if (draggingItem && l.id === current) continue;if (!Object.prototype.hasOwnProperty.call(seenEvents, l.id)) {
   seenEvents[l.id] = (data.list.events || [])
-    .filter(event => event.type === 'add' || event.type === 'start')
+.filter(isListUpdate)
     .map(event => event.id);
   saveSeenEvents();
 }
@@ -240,26 +241,8 @@ if(prev&&data.list.events?.length){let old=new Set((prev.events||[]).map(x=>x.id
   } finally {
     refreshInProgress = false;
   }
-}function isListUpdate(event) {
-  return [
-    'add',
-    'check',
-    'remove',
-    'reorder',
-    'rename',
-    'start',
-    'lastCall',
-    'done'
-  ].includes(event.type);
 }
 
-function isOtherMember(event) {
-  if (event.memberId) {
-    return event.memberId !== memberId;
-  }
-
-  return event.by !== state.person;
-}
 function isListUpdate(event) {
   return [
     'add',
@@ -357,10 +340,7 @@ senderEndpoint: await getSenderEndpoint(),
       lists[l.id].updatedAt = result.version;
 
       seenEvents[l.id] = (result.list.events || [])
-        .filter(event =>
-          event.type === 'add' ||
-          event.type === 'start'
-        )
+.filter(isListUpdate)
         .map(event => event.id);
 
       saveSeenEvents();
@@ -542,13 +522,13 @@ $('back').onclick = () => {
 
 $('lists').onclick=e=>{
   let close=e.target.closest('[data-close]');
-if (close) {
-  e.stopPropagation();
-  leaveSharedList(close.dataset.close);
-  return;
-}
+
+  if (close) {
+    e.stopPropagation();
+    leaveSharedList(close.dataset.close);
     return;
   }
+
   let b=e.target.closest('[data-open]');
   if(b){
 current=b.dataset.open;
@@ -686,8 +666,7 @@ $('deleteList').onclick = () => {
   if (current) {
     leaveSharedList(current);
   }
-};$('deleteList').onclick=()=>{if(confirm('Remove this list from your device? Others can still use it.')){const departing=getLink();getSenderEndpoint().then(endpoint=>endpoint&&api('/api/unsubscribe',{id:departing.id,key:departing.key,endpoint})).catch(()=>{});state.links=state.links.filter(l=>l.id!==current);delete lists[current];current=null;save();render()}};
-$('share').onclick=async()=>{let l=getLink();if(!l)return;let url=linkFor(l);try{if(navigator.share)await navigator.share({title:'Need Anything?',text:'Join my shopping list!',url});else if(navigator.clipboard){await navigator.clipboard.writeText(url);toast('Invitation link copied!')}else prompt('Copy this private invitation link:',url)}catch(e){if(e.name!=='AbortError')prompt('Copy this private invitation link:',url)}};$('enablePush').classList.toggle('hide', notificationPermission() === 'granted');updatePushPanel();
+};$('share').onclick=async()=>{let l=getLink();if(!l)return;let url=linkFor(l);try{if(navigator.share)await navigator.share({title:'Need Anything?',text:'Join my shopping list!',url});else if(navigator.clipboard){await navigator.clipboard.writeText(url);toast('Invitation link copied!')}else prompt('Copy this private invitation link:',url)}catch(e){if(e.name!=='AbortError')prompt('Copy this private invitation link:',url)}};$('enablePush').classList.toggle('hide', notificationPermission() === 'granted');updatePushPanel();
 async function init() {
   let q = new URLSearchParams(location.search);
   let id = q.get('list');
