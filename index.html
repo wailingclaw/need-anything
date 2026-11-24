@@ -106,7 +106,10 @@ function playDing() {
   <div id="membersList">
     <p class="muted" style="font-size:13px">Loading members...</p>
   </div>
-</div><div id="shoppingBanner" class="card shopping hide"></div><div class="actions"><button class="primary" id="startShop">🛒 I'm Shopping!</button><button id="lastCall" class="hide">🔔 Last Call!</button><button id="doneShop" class="hide">✓ Done Shopping</button></div><form id="addForm" class="row"><input id="itemName" aria-label="Item name" placeholder="Add an item…" maxlength="100" required><input id="qty" aria-label="Quantity" placeholder="Qty" style="max-width:76px" maxlength="20"><button class="primary" type="submit">+</button></form><div class="card"><strong>Need to get</strong><div id="items"></div></div><div class="history"><h2>Got it ✓</h2><div id="completed" class="card"></div></div><button id="deleteList" class="outline full" style="margin-top:28px;color:#a22">Delete this list</button></section></main><dialog id="nameDialog"><form method="dialog" id="nameForm" class="stack"><h2>What's your name?</h2><p class="muted" style="margin:0">We'll use this to show who's shopping.</p><input id="personName" placeholder="Your first name" required maxlength="40"><button class="primary" value="save">Continue</button></form></dialog><dialog id="createDialog"><form method="dialog" id="createForm" class="stack"><h2>New shopping list</h2><input id="newListName" placeholder="e.g. Groceries" required maxlength="60"><button class="primary" value="save">Create list</button><button value="cancel">Cancel</button></form></dialog><script>
+</div><div id="shoppingBanner" class="card shopping hide"></div><div class="actions"><button class="primary" id="startShop">🛒 I'm Shopping!</button><button id="lastCall" class="hide">🔔 Last Call!</button><button id="doneShop" class="hide">✓ Done Shopping</button></div><form id="addForm" class="row"><input id="itemName" aria-label="Item name" placeholder="Add an item…" maxlength="100" required><input id="qty" aria-label="Quantity" placeholder="Qty" style="max-width:76px" maxlength="20"><button class="primary" type="submit">+</button></form><div class="history">
+  <h2 id="needToGetHeading">Need to get</h2>
+  <div id="items" class="card"></div>
+</div><div class="history"><h2>Got it ✓</h2><div id="completed" class="card"></div></div><button id="deleteList" class="outline full" style="margin-top:28px;color:#a22">Delete this list</button></section></main><dialog id="nameDialog"><form method="dialog" id="nameForm" class="stack"><h2>What's your name?</h2><p class="muted" style="margin:0">We'll use this to show who's shopping.</p><input id="personName" placeholder="Your first name" required maxlength="40"><button class="primary" value="save">Continue</button></form></dialog><dialog id="createDialog"><form method="dialog" id="createForm" class="stack"><h2>New shopping list</h2><input id="newListName" placeholder="e.g. Groceries" required maxlength="60"><button class="primary" value="save">Create list</button><button value="cancel">Cancel</button></form></dialog><script>
 const KEY='need-anything-v2', $=id=>document.getElementById(id);
 // Language preference
 const LANGUAGE_KEY = 'need-anything-language';
@@ -278,7 +281,7 @@ function applyLanguage() {
     }
   }
 
-  $('items').previousElementSibling.textContent =
+$('needToGetHeading').textContent =
     t('needToGet');
 
   $('itemName').placeholder = t('addItem');
