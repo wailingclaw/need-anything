@@ -121,19 +121,124 @@ const translations = {
     tagline: 'Shopping is better together.',
     myLists: 'My Lists',
     newList: '+ New List',
-    back: '← My Lists'
+    back: '← My Lists',
+    footer: 'No accounts. No ads. Share a private invitation link to shop together.',
+    invite: 'Invite ↗',
+    members: '👥 Members',
+    loadingMembers: 'Loading members...',
+    noMembers: 'No members yet.',
+    online: 'Online',
+    you: ' (You)',
+    newBadge: 'NEW',
+    shoppingNow: 'Shopping now',
+    connecting: 'Connecting…',
+    updated: 'Updated',
+    removeList: 'Remove list',
+    noLists: 'No lists yet. Create your first one! 🛒',
+    loadingList: 'Loading list…',
+    itemsToGet: 'items to get',
+    leftToGet: 'left to get',
+    shopping: "🛒 I'm Shopping!",
+    lastCall: '🔔 Last Call!',
+    doneShopping: '✓ Done Shopping',
+    lastCallMessage: '🔔 Last call! Anything else?',
+    addBelow: 'Need anything? Add it below.',
+    addItem: 'Add an item…',
+    itemName: 'Item name',
+    quantity: 'Quantity',
+    qty: 'Qty',
+    needToGet: 'Need to get',
+    gotIt: 'Got it ✓',
+    nothingChecked: 'Nothing checked off yet.',
+    clearList: 'Your list is clear! ✨',
+    leaveList: 'Leave this shared list',
+    leaveConfirm: 'Leave this shared list? Others can still use it. You can rejoin with an invitation.',
+    leftList: 'You left the shared list.',
+    leaveError: 'Could not leave list: ',
+    saveError: 'Could not save change: ',
+    connectionError: 'Unable to connect. Check your internet connection.',
+    alerts: 'Shopping alerts',
+    alertsDescription: 'Get alerts when someone starts shopping or sends a last call.',
+    enableNotifications: 'Enable notifications',
+    notificationsEnabled: 'Notifications enabled on this device.',
+    yourName: "What's your name?",
+    nameDescription: "We'll use this to show who's shopping.",
+    firstName: 'Your first name',
+    continue: 'Continue',
+    newShoppingList: 'New shopping list',
+    exampleList: 'e.g. Groceries',
+    createList: 'Create list',
+    cancel: 'Cancel',
+    joinList: 'Join my shopping list!',
+    copied: 'Invitation link copied!',
+    copyLink: 'Copy this private invitation link:',
+    sharedList: 'Shared list'
   },
   es: {
     tagline: 'Comprar es mejor juntos.',
     myLists: 'Mis listas',
     newList: '+ Nueva lista',
-    back: '← Mis listas'
+    back: '← Mis listas',
+    footer: 'Sin cuentas. Sin anuncios. Comparte un enlace privado para hacer las compras juntos.',
+    invite: 'Invitar ↗',
+    members: '👥 Miembros',
+    loadingMembers: 'Cargando miembros...',
+    noMembers: 'Aún no hay miembros.',
+    online: 'En línea',
+    you: ' (Tú)',
+    newBadge: 'NUEVO',
+    shoppingNow: 'De compras',
+    connecting: 'Conectando…',
+    updated: 'Actualizado',
+    removeList: 'Quitar lista',
+    noLists: 'Aún no hay listas. ¡Crea tu primera lista! 🛒',
+    loadingList: 'Cargando lista…',
+    itemsToGet: 'artículos por comprar',
+    leftToGet: 'por comprar',
+    shopping: '🛒 ¡Estoy de compras!',
+    lastCall: '🔔 ¡Última llamada!',
+    doneShopping: '✓ Terminé las compras',
+    lastCallMessage: '🔔 ¡Última llamada! ¿Algo más?',
+    addBelow: '¿Necesitas algo? Añádelo abajo.',
+    addItem: 'Añadir un artículo…',
+    itemName: 'Nombre del artículo',
+    quantity: 'Cantidad',
+    qty: 'Cant.',
+    needToGet: 'Por comprar',
+    gotIt: 'Comprado ✓',
+    nothingChecked: 'Aún no hay artículos comprados.',
+    clearList: '¡Tu lista está vacía! ✨',
+    leaveList: 'Salir de esta lista compartida',
+    leaveConfirm: '¿Salir de esta lista compartida? Los demás podrán seguir usándola. Puedes volver con una invitación.',
+    leftList: 'Has salido de la lista compartida.',
+    leaveError: 'No se pudo salir de la lista: ',
+    saveError: 'No se pudo guardar el cambio: ',
+    connectionError: 'No se pudo conectar. Revisa tu conexión a internet.',
+    alerts: 'Alertas de compras',
+    alertsDescription: 'Recibe alertas cuando alguien empiece a comprar o envíe una última llamada.',
+    enableNotifications: 'Activar notificaciones',
+    notificationsEnabled: 'Notificaciones activadas en este dispositivo.',
+    yourName: '¿Cómo te llamas?',
+    nameDescription: 'Usaremos tu nombre para mostrar quién está de compras.',
+    firstName: 'Tu nombre',
+    continue: 'Continuar',
+    newShoppingList: 'Nueva lista de compras',
+    exampleList: 'Ej. Supermercado',
+    createList: 'Crear lista',
+    cancel: 'Cancelar',
+    joinList: '¡Únete a mi lista de compras!',
+    copied: '¡Enlace de invitación copiado!',
+    copyLink: 'Copia este enlace privado de invitación:',
+    sharedList: 'Lista compartida'
   }
 };
 
+function t(key) {
+  return translations[language][key]
+    ?? translations.en[key]
+    ?? key;
+}
 function applyLanguage() {
-  const words = translations[language];
-
   document.documentElement.lang = language;
 
   $('languageSwitch').setAttribute(
@@ -141,15 +246,61 @@ function applyLanguage() {
     String(language === 'es')
   );
 
-  document.querySelector('.brand p').textContent =
-    words.tagline;
+  const labels = {
+    '.brand p': 'tagline',
+    '#home .top h2': 'myLists',
+    '#create': 'newList',
+    '#back': 'back',
+    '.footer': 'footer',
+    '#share': 'invite',
+    '#startShop': 'shopping',
+    '#lastCall': 'lastCall',
+    '#doneShop': 'doneShopping',
+    '#items': null,
+    '#completed': null,
+    '.history h2': 'gotIt',
+    '#deleteList': 'leaveList',
+    '#pushPanel strong': 'alerts',
+    '#pushPanel p': 'alertsDescription',
+    '#enablePush': 'enableNotifications',
+    '#nameDialog h2': 'yourName',
+    '#nameDialog p': 'nameDescription',
+    '#nameForm button': 'continue',
+    '#createDialog h2': 'newShoppingList',
+    '#createForm button[value="save"]': 'createList',
+    '#createForm button[value="cancel"]': 'cancel'
+  };
 
-  document.querySelector('#home .top h2').textContent =
-    words.myLists;
+  for (const [selector, key] of Object.entries(labels)) {
+    const element = document.querySelector(selector);
+    if (element && key) {
+      element.textContent = t(key);
+    }
+  }
 
-  $('create').textContent = words.newList;
-  $('back').textContent = words.back;
+  $('items').previousElementSibling.textContent =
+    t('needToGet');
+
+  $('itemName').placeholder = t('addItem');
+  $('qty').placeholder = t('qty');
+  $('personName').placeholder = t('firstName');
+  $('newListName').placeholder = t('exampleList');
+
+  $('itemName').setAttribute('aria-label', t('itemName'));
+  $('qty').setAttribute('aria-label', t('quantity'));
+
+  if (!$('membersHeading').textContent.includes('(')) {
+    $('membersHeading').textContent = t('members');
+
+    $('membersList').innerHTML =
+      `<p class="muted" style="font-size:13px">${t('loadingMembers')}</p>`;
+  }
+
+  if ($('pushStatus').textContent) {
+    $('pushStatus').textContent = t('notificationsEnabled');
+  }
 }
+
 
 $('languageSwitch').onclick = () => {
   language = language === 'en' ? 'es' : 'en';
@@ -157,6 +308,8 @@ $('languageSwitch').onclick = () => {
   localStorage.setItem(LANGUAGE_KEY, language);
 
   applyLanguage();
+  render();
+  loadMembers();
 };
 
 applyLanguage();const notificationPermission = () =>
@@ -234,21 +387,21 @@ const response = await fetch(
 
 const members = data.members || [];
 
-$('membersHeading').textContent = `👥 Members (${members.length})`;
+$('membersHeading').textContent = `${t('members')} (${members.length})`;
 
     $('membersList').innerHTML = members.length
       ? members.map(m => {
           const isYou = m.id === memberId;
 
           const dot = m.online ? '#27b34a' : '#aaa';
-          const status = m.online ? 'Online' : timeAgo(m.lastActive);
+          const status = m.online ? t('online') : timeAgo(m.lastActive);
 
           return `
             <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:9px 0">
               <div style="display:flex;align-items:center;gap:9px;min-width:0">
                 <span style="width:8px;height:8px;border-radius:50%;background:${dot};flex:none"></span>
                 <span style="font-size:14px;font-weight:600;overflow-wrap:anywhere">
-                  ${escapeHTML(m.name)}${isYou ? ' (You)' : ''}
+                  ${escapeHTML(m.name)}${isYou ? t('you') : ''}
                 </span>
               </div>
               <span class="muted" style="font-size:12px;white-space:nowrap">
@@ -257,7 +410,7 @@ $('membersHeading').textContent = `👥 Members (${members.length})`;
             </div>
           `;
         }).join('')
-      : '<p class="muted">No members yet.</p>';
+      : `<p class="muted">${t('noMembers')}</p>`;
 
   } catch (e) {
     console.warn('Could not load members:', e);
@@ -265,18 +418,37 @@ $('membersHeading').textContent = `👥 Members (${members.length})`;
 }
 
 function timeAgo(timestamp) {
-  const seconds = Math.max(0, Math.floor(Date.now() / 1000 - timestamp));
+  const seconds = Math.max(
+    0,
+    Math.floor(Date.now() / 1000 - timestamp)
+  );
 
-  if (seconds < 60) return 'just now';
+  if (seconds < 60) {
+    return language === 'es'
+      ? 'ahora mismo'
+      : 'just now';
+  }
+
+  const formatter = new Intl.RelativeTimeFormat(
+    language,
+    { numeric: 'always' }
+  );
 
   const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return minutes + ' minute' + (minutes === 1 ? '' : 's') + ' ago';
+
+  if (minutes < 60) {
+    return formatter.format(-minutes, 'minute');
+  }
 
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return hours + ' hour' + (hours === 1 ? '' : 's') + ' ago';
+
+  if (hours < 24) {
+    return formatter.format(-hours, 'hour');
+  }
 
   const days = Math.floor(hours / 24);
-  return days + ' day' + (days === 1 ? '' : 's') + ' ago';
+
+  return formatter.format(-days, 'day');
 }
 const escapeHTML=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const shoppingCategories = {
@@ -335,7 +507,11 @@ if (current === l.id) {
   saveSeenEvents();
 }
 
-if(prev&&data.list.events?.length){let old=new Set((prev.events||[]).map(x=>x.id));let added=data.list.events.filter(x=>!old.has(x.id));for(let e of added){if(e.by!==state.person){if(e.type==='start')toast(`${e.by} is shopping! Need anything?`);if(e.type==='lastCall')toast(`🔔 Last call from ${e.by}!`)}}}}catch(e){if(!silent)toast('Unable to connect. Check your internet connection.')}}if (!draggingItem && !busy) render();
+if(prev&&data.list.events?.length){let old=new Set((prev.events||[]).map(x=>x.id));let added=data.list.events.filter(x=>!old.has(x.id));for(let e of added){if(e.by!==state.person){if(e.type==='start')toast(language === 'es'
+  ? `¡${e.by} está de compras! ¿Necesitas algo?`
+  : `${e.by} is shopping! Need anything?`);if(e.type==='lastCall')toast(language === 'es'
+  ? `🔔 ¡Última llamada de ${e.by}!`
+  : `🔔 Last call from ${e.by}!`)}}}}catch(e){if(!silent)toast(t('connectionError'))}}if (!draggingItem && !busy) render();
 
   } finally {
     refreshInProgress = false;
@@ -453,7 +629,7 @@ senderEndpoint: await getSenderEndpoint(),
       lists[l.id] = previousList;
     }
 
-    toast('Could not save change: ' + e.message);
+    toast(t('saveError') + e.message);
 
     return false;
 
@@ -463,15 +639,15 @@ senderEndpoint: await getSenderEndpoint(),
     render();
   }
 }
-function render(){rememberActiveList();updatePushPanel();let list=getList();$('home').classList.toggle('hide',!!current);$('detail').classList.toggle('hide',!current);$('lists').innerHTML=state.links.length?state.links.map(l=>{let x=lists[l.id];return `<div class="card listcard" data-open="${escapeHTML(l.id)}" role="button" tabindex="0" style="cursor:pointer"><span><strong>${escapeHTML(x?.name||l.name||'Shared list')}</strong>${hasNewActivity(l.id)?'<span style="display:inline-block;background:#22c55e;color:#fff;font-size:10px;font-weight:800;padding:3px 7px;border-radius:20px;margin-left:8px;vertical-align:middle">NEW</span>':''}<small>${x?x.items.filter(i=>!i.done).length+' items to get'+(x.shopping?' · 🟢 Shopping now':''):'Connecting…'}</small>${x?.updatedAt?`<small>Updated ${timeAgo(x.updatedAt)}</small>`:''}</span><span class="remove-list" data-close="${escapeHTML(l.id)}" title="Remove list" role="button" tabindex="0" aria-label="Remove list">✕</span></div>`}).join(''):'<div class="empty">No lists yet. Create your first one! 🛒</div>';
+function render(){rememberActiveList();updatePushPanel();let list=getList();$('home').classList.toggle('hide',!!current);$('detail').classList.toggle('hide',!current);$('lists').innerHTML=state.links.length?state.links.map(l=>{let x=lists[l.id];return `<div class="card listcard" data-open="${escapeHTML(l.id)}" role="button" tabindex="0" style="cursor:pointer"><span><strong>${escapeHTML(x?.name||l.name||'Shared list')}</strong>${hasNewActivity(l.id)?'<span style="display:inline-block;background:#22c55e;color:#fff;font-size:10px;font-weight:800;padding:3px 7px;border-radius:20px;margin-left:8px;vertical-align:middle">'+t('newBadge')+'</span>':''}<small>${x?x.items.filter(i=>!i.done).length+' '+t('itemsToGet')+(x.shopping?' · 🟢 '+t('shoppingNow'):''):t('connecting')}</small>${x?.updatedAt?`<small>${t('updated')} ${timeAgo(x.updatedAt)}</small>`:''}</span><span class="remove-list" data-close="${escapeHTML(l.id)}" title="${t('removeList')}" role="button" tabindex="0" aria-label="${t('removeList')}">✕</span></div>`}).join(''):`<div class="empty">${t('noLists')}</div>`;
 if (!current) return;
 
 if (!list) {
-  $('listTitle').textContent = 'Loading list…';
+  $('listTitle').textContent = t('loadingList');
   $('count').textContent = '';
   return;
 }
-$('listTitle').textContent=list.name;$('count').textContent=`${list.items.filter(i=>!i.done).length} left to get`;$('shoppingBanner').classList.toggle('hide',!list.shopping);if(list.shopping)$('shoppingBanner').innerHTML=`<strong>🟢 ${escapeHTML(list.shopping.by)} is shopping!</strong><p>${list.shopping.lastCall?'🔔 Last call! Anything else?':'Need anything? Add it below.'}</p>`;
+$('listTitle').textContent=list.name;$('count').textContent=`${list.items.filter(i=>!i.done).length} ${t('leftToGet')}`;$('shoppingBanner').classList.toggle('hide',!list.shopping);if(list.shopping)$('shoppingBanner').innerHTML=`<strong>🟢 ${escapeHTML(list.shopping.by)} ${language === 'es' ? '¡está de compras!' : 'is shopping!'}</strong><p>${list.shopping.lastCall?t('lastCallMessage'):t('addBelow')}</p>`;
 $('startShop').classList.toggle('hide',!!list.shopping);$('lastCall').classList.toggle('hide',!list.shopping);$('doneShop').classList.toggle('hide',!list.shopping);$('lastCall').disabled=!!list.shopping?.lastCall;
 
 
@@ -484,7 +660,7 @@ function rows(done) {
         <input type="checkbox"
           data-check="${escapeHTML(i.id)}"
           ${done ? 'checked' : ''}
-          aria-label="Mark ${escapeHTML(i.name)} ${done ? 'needed' : 'purchased'}">
+          aria-label="${language === 'es' ? 'Marcar' : 'Mark'} ${escapeHTML(i.name)} ${language === 'es' ? (done ? 'como pendiente' : 'como comprado') : (done ? 'needed' : 'purchased')}">
 
         <span class="name">
           ${escapeHTML(i.name)}
@@ -492,24 +668,24 @@ function rows(done) {
         </span>
 
         ${!done && list.shopping && i.addedDuring === list.shopping.id
-          ? '<span class="badge">NEW</span>'
+          ? '<span class="badge">'+t('newBadge')+'</span>'
           : ''}
 
 
 <button class="iconbtn"
   data-remove="${escapeHTML(i.id)}"
-  aria-label="Remove ${escapeHTML(i.name)}">✕</button>
+  aria-label="${language === 'es' ? 'Quitar' : 'Remove'} ${escapeHTML(i.name)}">✕</button>
 
 ${!done ? `
   <button class="drag-handle"
     type="button"
     data-drag="${escapeHTML(i.id)}"
-    aria-label="Drag to reorder ${escapeHTML(i.name)}">⠿</button>
+    aria-label="${language === 'es' ? 'Arrastrar para reordenar' : 'Drag to reorder'} ${escapeHTML(i.name)}">⠿</button>
 ` : ''}
 </div>
 
     `).join('')
-    : `<div class="empty">${done ? 'Nothing checked off yet.' : 'Your list is clear! ✨'}</div>`;
+    : `<div class="empty">${done ? t('nothingChecked') : t('clearList')}</div>`;
 }
 
 
@@ -532,15 +708,15 @@ function b64bytes(base64){const padded=base64.replace(/-/g,'+').replace(/_/g,'/'
 async function getSenderEndpoint(){try{if(!pushRegistration)return '';const s=await pushRegistration.pushManager.getSubscription();return s?.endpoint||''}catch{return ''}}
 async function subscribeList(l){if(!pushRegistration)return;const s=await pushRegistration.pushManager.getSubscription();if(s)await api('/api/subscribe',{id:l.id,key:l.key,subscription:s.toJSON()})}
 async function enableNotifications(){try{
- if(!window.isSecureContext||!('serviceWorker' in navigator)||!('PushManager' in window)){toast('Notifications need HTTPS and a supported browser.');return}
- if(notificationPermission()==='denied'){toast('Notifications are blocked in your browser settings.');return}
- const config=await (await fetch('/api/push-config')).json();if(!config.publicKey){toast('Push is not configured on the server yet.');return}
- const permission=await Notification.requestPermission();if(permission!=='granted'){toast('Notifications not enabled.');return}
+ if(!window.isSecureContext||!('serviceWorker' in navigator)||!('PushManager' in window)){toast(language === 'es' ? 'Las notificaciones requieren HTTPS y un navegador compatible.' : 'Notifications need HTTPS and a supported browser.');return}
+ if(notificationPermission()==='denied'){toast(language === 'es' ? 'Las notificaciones están bloqueadas en tu navegador.' : 'Notifications are blocked in your browser settings.');return}
+ const config=await (await fetch('/api/push-config')).json();if(!config.publicKey){toast(language === 'es' ? 'Las notificaciones aún no están configuradas en el servidor.' : 'Push is not configured on the server yet.');return}
+ const permission=await Notification.requestPermission();if(permission!=='granted'){toast(language === 'es' ? 'Notificaciones no activadas.' : 'Notifications not enabled.');return}
  pushRegistration=await navigator.serviceWorker.ready;
  let sub=await pushRegistration.pushManager.getSubscription();if(!sub)sub=await pushRegistration.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64bytes(config.publicKey)});
  for(const l of state.links)await subscribeList(l);
- $('pushStatus').textContent='Notifications enabled on this device.';$('enablePush').classList.add('hide');updatePushPanel();toast('Shopping alerts enabled!');
- }catch(e){toast('Could not enable notifications: '+e.message)}}function updatePushPanel() {
+$('pushStatus').textContent=t('notificationsEnabled');$('enablePush').classList.add('hide');updatePushPanel();toast(language === 'es' ? '¡Alertas de compras activadas!' : 'Shopping alerts enabled!');
+ }catch(e){toast((language === 'es' ? 'No se pudieron activar las notificaciones: ' : 'Could not enable notifications: ')+e.message)}}function updatePushPanel() {
   $('pushPanel').classList.toggle(
     'hide',
     notificationPermission() === 'granted' ||
@@ -550,8 +726,8 @@ async function enableNotifications(){try{
 $('enablePush').onclick=enableNotifications;
 $('create').onclick=()=>$('createDialog').showModal();
 $('createForm').onsubmit=async e=>{e.preventDefault();let name=$('newListName').value.trim();if(!name)return;try{let r=await api('/api/create',{name});state.links.push({id:r.id,key:r.key,name});save();lists[r.id]=r.list;current=r.id;
-$('membersHeading').textContent = '👥 Members';
-$('membersList').innerHTML = '<p class="muted" style="font-size:13px">Loading members...</p>';if(notificationPermission()==='granted')subscribeList(state.links[state.links.length-1]).catch(()=>{});$('createDialog').close();$('newListName').value='';render();await updateMemberActivity();loadMembers()}catch(e){toast(e.message)}};
+$('membersHeading').textContent = t('members');
+$('membersList').innerHTML = `<p class="muted" style="font-size:13px">${t('loadingMembers')}</p>`;if(notificationPermission()==='granted')subscribeList(state.links[state.links.length-1]).catch(()=>{});$('createDialog').close();$('newListName').value='';render();await updateMemberActivity();loadMembers()}catch(e){toast(e.message)}};
 $('nameForm').onsubmit=async e=>{
   e.preventDefault();
   let n=$('personName').value.trim();
@@ -569,10 +745,7 @@ $('nameForm').onsubmit=async e=>{
 
   if (!link) return;
 
-  if (!confirm(
-    'Leave this shared list? Others can still use it. ' +
-    'You can rejoin with an invitation.'
-  )) return;
+  if (!confirm(t('leaveConfirm'))) return;
 
   leavingList = true;
 
@@ -603,10 +776,10 @@ $('nameForm').onsubmit=async e=>{
     save();
     render();
 
-    toast('You left the shared list.');
+    toast(t('leftList'));
 
   } catch (e) {
-    toast('Could not leave list: ' + e.message);
+    toast(t('leaveError') + e.message);
 
   } finally {
     leavingList = false;
@@ -631,8 +804,8 @@ $('lists').onclick=e=>{
   let b=e.target.closest('[data-open]');
   if(b){
 current=b.dataset.open;
-$('membersHeading').textContent = '👥 Members';
-$('membersList').innerHTML = '<p class="muted" style="font-size:13px">Loading members...</p>';
+$('membersHeading').textContent = t('members');
+$('membersList').innerHTML = `<p class="muted" style="font-size:13px">${t('loadingMembers')}</p>`;
     seenEvents[current] = (lists[current]?.events || [])
 .filter(isListUpdate)
       .map(event => event.id);
@@ -759,13 +932,13 @@ $('startShop').onclick=()=>{playDing();act('start')};
 $('lastCall').onclick=()=>{playDing();act('lastCall')};
 $('doneShop').onclick=()=>act('done');
 
-$('deleteList').textContent = 'Leave this shared list';
+$('deleteList').textContent = t('leaveList');
 
 $('deleteList').onclick = () => {
   if (current) {
     leaveSharedList(current);
   }
-};$('share').onclick=async()=>{let l=getLink();if(!l)return;let url=linkFor(l);try{if(navigator.share)await navigator.share({title:'Need Anything?',text:'Join my shopping list!',url});else if(navigator.clipboard){await navigator.clipboard.writeText(url);toast('Invitation link copied!')}else prompt('Copy this private invitation link:',url)}catch(e){if(e.name!=='AbortError')prompt('Copy this private invitation link:',url)}};$('enablePush').classList.toggle('hide', notificationPermission() === 'granted');updatePushPanel();
+};$('share').onclick=async()=>{let l=getLink();if(!l)return;let url=linkFor(l);try{if(navigator.share)await navigator.share({title:'Need Anything?',text:t('joinList'),url});else if(navigator.clipboard){await navigator.clipboard.writeText(url);toast(t('copied'))}else prompt(t('copyLink'),url)}catch(e){if(e.name!=='AbortError')prompt(t('copyLink'),url)}};$('enablePush').classList.toggle('hide', notificationPermission() === 'granted');updatePushPanel();
 async function init() {
   let q = new URLSearchParams(location.search);
   let id = q.get('list');
@@ -799,7 +972,7 @@ async function init() {
   }
 }if('serviceWorker' in navigator && window.isSecureContext){try{pushRegistration=await navigator.serviceWorker.register('/sw.js')}catch(e){console.warn('Service worker unavailable')}}
 if(!state.person)$('nameDialog').showModal();render();await refresh(false);
-if(pushRegistration&&notificationPermission()==='granted'){for(const l of state.links)subscribeList(l).catch(()=>{});$('pushStatus').textContent='Notifications enabled on this device.'}
+if(pushRegistration&&notificationPermission()==='granted'){for(const l of state.links)subscribeList(l).catch(()=>{});$('pushStatus').textContent=t('notificationsEnabled')}
 $('enablePush').classList.toggle('hide', notificationPermission() === 'granted');
 
 await updateMemberActivity();
