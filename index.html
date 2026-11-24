@@ -86,21 +86,33 @@ try {
 } catch {}
 
 const saveSeenEvents = () =>
-  localStorage.setItem(SEEN_KEY, JSON.stringify(seenEvents));async function updateMemberActivity() {
+  localStorage.setItem(SEEN_KEY, JSON.stringify(seenEvents));let leavingList = false;
+let memberActivityRequest = null;
+
+async function updateMemberActivity() {
+  if (leavingList) return;
+
+  if (memberActivityRequest) {
+    await memberActivityRequest;
+    return;
+  }
   const link = state.links.find(l => l.id === current);
 
   if (!link || !state.person || document.hidden) return;
 
   try {
-    await api('/api/member', {
-      id: link.id,
-      key: link.key,
-      memberId,
-      name: state.person
-    });
-  } catch (e) {
-    console.warn('Member activity update failed:', e);
-  }
+memberActivityRequest = api('/api/member', {
+  id: link.id,
+  key: link.key,
+  memberId,
+  name: state.person
+});
+
+await memberActivityRequest;
+} catch (e) {
+  console.warn('Member activity update failed:', e);
+} finally {
+  memberActivityRequest = null;
 }
 
 async function loadMembers() {
@@ -292,8 +304,9 @@ async function act(action, extra = {}) {
       id: l.id,
       key: l.key,
       action,
-      person: state.person || 'Someone',
-      senderEndpoint: await getSenderEndpoint(),
+person: state.person || 'Someone',
+memberId: memberId,
+senderEndpoint: await getSenderEndpoint(),
       ...extra
     });
 
@@ -429,22 +442,65 @@ $('nameForm').onsubmit=async e=>{
     await updateMemberActivity();
     loadMembers();
   }
-};
+};async function leaveSharedList(id) {
+  if (leavingList || busy) return;
+
+  const link = state.links.find(l => l.id === id);
+
+  if (!link) return;
+
+  if (!confirm(
+    'Leave this shared list? Others can still use it. ' +
+    'You can rejoin with an invitation.'
+  )) return;
+
+  leavingList = true;
+
+  try {
+    if (memberActivityRequest) {
+      await memberActivityRequest.catch(() => {});
+    }
+
+    const endpoint = await getSenderEndpoint();
+
+    await api('/api/leave', {
+      id: link.id,
+      key: link.key,
+      memberId,
+      endpoint
+    });
+
+    state.links = state.links.filter(l => l.id !== id);
+
+    delete lists[id];
+    delete seenEvents[id];
+
+    if (current === id) {
+      current = null;
+    }
+
+    saveSeenEvents();
+    save();
+    render();
+
+    toast('You left the shared list.');
+
+  } catch (e) {
+    toast('Could not leave list: ' + e.message);
+
+  } finally {
+    leavingList = false;
+  }
+}
 $('back').onclick=()=>{current=null;render()};
 
 $('lists').onclick=e=>{
   let close=e.target.closest('[data-close]');
-  if(close){
-    e.stopPropagation();
-    const id=close.dataset.close;
-    if(confirm('Remove this list from your device? Others can still use it.')){
-      state.links=state.links.filter(l=>l.id!==id);
-      delete lists[id];
-      delete seenEvents[id];
-      saveSeenEvents();
-      save();
-      render();
-    }
+if (close) {
+  e.stopPropagation();
+  leaveSharedList(close.dataset.close);
+  return;
+}
     return;
   }
   let b=e.target.closest('[data-open]');
@@ -578,9 +634,37 @@ $('startShop').onclick=()=>{playDing();act('start')};
 $('lastCall').onclick=()=>{playDing();act('lastCall')};
 $('doneShop').onclick=()=>act('done');
 
-$('deleteList').textContent='Leave this shared list';$('deleteList').onclick=()=>{if(confirm('Remove this list from your device? Others can still use it.')){const departing=getLink();getSenderEndpoint().then(endpoint=>endpoint&&api('/api/unsubscribe',{id:departing.id,key:departing.key,endpoint})).catch(()=>{});state.links=state.links.filter(l=>l.id!==current);delete lists[current];current=null;save();render()}};
+$('deleteList').textContent = 'Leave this shared list';
+
+$('deleteList').onclick = () => {
+  if (current) {
+    leaveSharedList(current);
+  }
+};$('deleteList').onclick=()=>{if(confirm('Remove this list from your device? Others can still use it.')){const departing=getLink();getSenderEndpoint().then(endpoint=>endpoint&&api('/api/unsubscribe',{id:departing.id,key:departing.key,endpoint})).catch(()=>{});state.links=state.links.filter(l=>l.id!==current);delete lists[current];current=null;save();render()}};
 $('share').onclick=async()=>{let l=getLink();if(!l)return;let url=linkFor(l);try{if(navigator.share)await navigator.share({title:'Need Anything?',text:'Join my shopping list!',url});else if(navigator.clipboard){await navigator.clipboard.writeText(url);toast('Invitation link copied!')}else prompt('Copy this private invitation link:',url)}catch(e){if(e.name!=='AbortError')prompt('Copy this private invitation link:',url)}};$('enablePush').classList.toggle('hide', notificationPermission() === 'granted');updatePushPanel();
-async function init(){let q=new URLSearchParams(location.search),id=q.get('list'),key=q.get('key');if(id&&key&&!state.links.some(l=>l.id===id)){state.links.push({id,key,name:'Shared list'});save()}if (id && key) {
+async function init() {
+  let q = new URLSearchParams(location.search);
+  let id = q.get('list');
+  let key = q.get('key');
+
+  if (id && key) {
+    const existingLink = state.links.find(l => l.id === id);
+
+    if (existingLink) {
+      existingLink.key = key;
+    } else {
+      state.links.push({
+        id,
+        key,
+        name: 'Shared list'
+      });
+
+      delete seenEvents[id];
+      saveSeenEvents();
+    }
+
+    save();
+  }if (id && key) {
   current = id;
   history.replaceState({}, '', location.pathname);
 } else {
