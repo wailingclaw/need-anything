@@ -366,7 +366,7 @@ class Handler(SimpleHTTPRequestHandler):
                 key = str(data.get('key', ''))
                 action = data.get('action')
                 person = str(data.get('person', 'Someone')).strip()[:40] or 'Someone'
-
+                member_id = str(data.get('memberId', ''))[:100]
                 with LOCK, connect() as db:
                     row = db.execute(
                         'SELECT secret, data FROM lists WHERE id=%s FOR UPDATE',
@@ -481,7 +481,21 @@ class Handler(SimpleHTTPRequestHandler):
                     else:
                         return self.reply(400, {'error': 'Unknown action'})
 
-                    obj['events'] = obj['events'][-30:]
+                    if action in ('check', 'remove', 'reorder', 'rename'):
+                        obj['events'].append({
+                            'id': token(),
+                            'type': action,
+                            'by': person,
+                            'at': now
+                        })
+
+                    if obj['events']:
+                        latest_event = obj['events'][-1]
+
+                        if latest_event.get('at') == now:
+                            latest_event['memberId'] = member_id
+
+                    obj['events'] = obj['events'][-100:]
                     db.execute(
                         'UPDATE lists SET data=%s, updated=%s WHERE id=%s',
                         (json.dumps(obj), now, lid)
