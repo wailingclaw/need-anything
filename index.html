@@ -205,7 +205,9 @@ async function refresh(silent=true) {
   ? state.links.filter(l => l.id === current)
   : [...state.links];
 
-for (let l of linksToRefresh) {try{let r=await fetch(`/api/list?id=${encodeURIComponent(l.id)}&key=${encodeURIComponent(l.key)}`,{cache:'no-store'});if(!r.ok)continue;let data=await r.json(),prev=lists[l.id];if ((draggingItem || busy) && l.id === current) continue;if (!Object.prototype.hasOwnProperty.call(seenEvents, l.id)) {
+for (let l of linksToRefresh) {const requestRevision = actionRevision;try{let r=await fetch(`/api/list?id=${encodeURIComponent(l.id)}&key=${encodeURIComponent(l.key)}`,{cache:'no-store'});if(!r.ok)continue;let data=await r.json(),prev=lists[l.id];if (busy || requestRevision !== actionRevision) continue;
+
+if (draggingItem && l.id === current) continue;if (!Object.prototype.hasOwnProperty.call(seenEvents, l.id)) {
   seenEvents[l.id] = (data.list.events || [])
     .filter(event => event.type === 'add' || event.type === 'start')
     .map(event => event.id);
@@ -239,13 +241,95 @@ function hasNewActivity(listId) {
     !seen.includes(event.id)
   );
 }
-  
-  async function act(action,extra={}){if(busy)return;let l=getLink();if(!l)return;busy=true;try{let result=await api('/api/action',{id:l.id,key:l.key,action,person:state.person||'Someone',senderEndpoint:(await getSenderEndpoint()),...extra});lists[l.id]=result.list;
-seenEvents[l.id] = (result.list.events || [])
-  .filter(event => event.type === 'add' || event.type === 'start')
-  .map(event => event.id);
-saveSeenEvents();
-render()}catch(e){toast(e.message);await refresh()}finally{busy=false}}
+  function applyOptimisticUpdate(list, action, extra) {
+  if (action === 'add') {
+    list.items.unshift({
+      id: 'temp-' + crypto.randomUUID(),
+      name: extra.name,
+      qty: extra.qty || '',
+      done: false,
+      addedDuring: list.shopping?.id || null
+    });
+  }
+
+  if (action === 'check') {
+    const item = list.items.find(
+      i => i.id === extra.itemId
+    );
+
+    if (item) {
+      item.done = extra.done;
+    }
+  }
+
+  if (action === 'remove') {
+    list.items = list.items.filter(
+      i => i.id !== extra.itemId
+    );
+  }
+}
+let actionRevision = 0;
+
+async function act(action, extra = {}) {
+  if (busy) return false;
+
+  const l = getLink();
+
+  if (!l || !lists[l.id]) return false;
+
+  busy = true;
+  actionRevision++;
+
+  const previousList = structuredClone(lists[l.id]);
+
+  try {
+    // Update the screen immediately.
+    applyOptimisticUpdate(lists[l.id], action, extra);
+    render();
+
+    // Save the change to the server.
+    const result = await api('/api/action', {
+      id: l.id,
+      key: l.key,
+      action,
+      person: state.person || 'Someone',
+      senderEndpoint: await getSenderEndpoint(),
+      ...extra
+    });
+
+    // Replace temporary information with confirmed data.
+    if (state.links.some(link => link.id === l.id)) {
+      lists[l.id] = result.list;
+      lists[l.id].updatedAt = result.version;
+
+      seenEvents[l.id] = (result.list.events || [])
+        .filter(event =>
+          event.type === 'add' ||
+          event.type === 'start'
+        )
+        .map(event => event.id);
+
+      saveSeenEvents();
+    }
+
+    return true;
+
+  } catch (e) {
+    // Restore the previous state if saving fails.
+    if (state.links.some(link => link.id === l.id)) {
+      lists[l.id] = previousList;
+    }
+
+    toast('Could not save change: ' + e.message);
+
+    return false;
+
+  } finally {
+    busy = false;
+    actionRevision++;
+    render();
+  }
+}
 function render(){rememberActiveList();updatePushPanel();let list=getList();$('home').classList.toggle('hide',!!current);$('detail').classList.toggle('hide',!current);$('lists').innerHTML=state.links.length?state.links.map(l=>{let x=lists[l.id];return `<div class="card listcard" data-open="${escapeHTML(l.id)}" role="button" tabindex="0" style="cursor:pointer"><span><strong>${escapeHTML(x?.name||l.name||'Shared list')}</strong>${hasNewActivity(l.id)?'<span style="display:inline-block;background:#22c55e;color:#fff;font-size:10px;font-weight:800;padding:3px 7px;border-radius:20px;margin-left:8px;vertical-align:middle">NEW</span>':''}<small>${x?x.items.filter(i=>!i.done).length+' items to get'+(x.shopping?' · 🟢 Shopping now':''):'Connecting…'}</small>${x?.updatedAt?`<small>Updated ${timeAgo(x.updatedAt)}</small>`:''}</span><span class="remove-list" data-close="${escapeHTML(l.id)}" title="Remove list" role="button" tabindex="0" aria-label="Remove list">✕</span></div>`}).join(''):'<div class="empty">No lists yet. Create your first one! 🛒</div>';
 if (!current) return;
 
@@ -298,7 +382,16 @@ ${!done ? `
 
 if (!draggingItem) {
   $('items').innerHTML = rows(false);
-  $('completed').innerHTML = rows(true);
+$('completed').innerHTML = rows(true);
+
+$('detail').querySelectorAll(
+  '[data-check], [data-remove], [data-drag], ' +
+  '#addForm button, #startShop, #lastCall, #doneShop'
+).forEach(button => {
+  button.disabled =
+    busy ||
+    (button.id === 'lastCall' && !!list.shopping?.lastCall);
+});
 }
 }
 
@@ -380,8 +473,32 @@ $('lists').onkeydown=e=>{
     target.click();
   
 };
+$('addForm').onsubmit = async e => {
+  e.preventDefault();
 
-$('addForm').onsubmit=async e=>{e.preventDefault();let name=$('itemName').value.trim(),qty=$('qty').value.trim();if(!name)return;await act('add',{name,qty});$('addForm').reset();$('itemName').focus()};
+  if (busy) return;
+
+  const name = $('itemName').value.trim();
+  const qty = $('qty').value.trim();
+  const originalList = current;
+
+  if (!name) return;
+
+  $('addForm').reset();
+  $('itemName').focus();
+
+  const success = await act('add', { name, qty });
+
+  if (
+    !success &&
+    current === originalList &&
+    !$('itemName').value &&
+    !$('qty').value
+  ) {
+    $('itemName').value = name;
+    $('qty').value = qty;
+  }
+};
 $('detail').addEventListener('change',e=>{if(e.target.matches('[data-check]'))act('check',{itemId:e.target.dataset.check,done:e.target.checked})});
 $('detail').addEventListener('click',e=>{let b=e.target.closest('[data-remove]');if(b)act('remove',{itemId:b.dataset.remove})});
 
