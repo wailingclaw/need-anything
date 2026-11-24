@@ -467,7 +467,34 @@ function persistSavedItems(nextItems) {
     return false;
   }
 }
+function findSavedItem(name) {
+  return savedItems.find(item =>
+    item.name.trim().toLowerCase() ===
+    name.trim().toLowerCase()
+  );
+}
 
+function updateSavedStar() {
+  const name = $('itemName').value.trim();
+  const alreadySaved = !!name && !!findSavedItem(name);
+  const panelOpen = !$('savedPanel').classList.contains('hide');
+
+  const active = name ? alreadySaved : panelOpen;
+
+  $('savedToggle').classList.toggle('active', active);
+  $('savedToggle').textContent = active ? '★' : '☆';
+
+  const label = name
+    ? alreadySaved
+      ? (language === 'es' ? 'Artículo guardado' : 'Item saved')
+      : (language === 'es' ? 'Guardar artículo' : 'Save item')
+    : (language === 'es' ? 'Artículos guardados' : 'Saved Items');
+
+  $('savedToggle').setAttribute('aria-label', label);
+  $('savedToggle').title = label;
+}
+
+$('itemName').addEventListener('input', updateSavedStar);
 function renderSavedItems() {
   const es = language === 'es';
 
@@ -478,10 +505,7 @@ function renderSavedItems() {
     ? (es ? 'Listo' : 'Done')
     : (es ? 'Editar' : 'Edit');
 
-  $('savedToggle').setAttribute(
-    'aria-label',
-    es ? 'Artículos guardados' : 'Saved Items'
-  );
+  updateSavedStar();
 
   $('savedClose').setAttribute(
     'aria-label',
@@ -570,8 +594,6 @@ function closeSavedItems() {
   savedEditing = false;
 
   $('savedPanel').classList.add('hide');
-  $('savedToggle').classList.remove('active');
-  $('savedToggle').textContent = '☆';
 
   $('savedToggle').setAttribute(
     'aria-expanded',
@@ -579,9 +601,47 @@ function closeSavedItems() {
   );
 
   $('savedForm').reset();
+
+  updateSavedStar();
 }
 
 $('savedToggle').onclick = () => {
+  const name = $('itemName').value.trim();
+  const qty = $('qty').value.trim();
+
+  // If an item is typed, save it instantly.
+  if (name) {
+
+    if (findSavedItem(name)) {
+      toast(language === 'es'
+        ? 'Este artículo ya está guardado.'
+        : 'Already in Saved Items!');
+
+      return;
+    }
+
+    const nextItems = [
+      ...savedItems,
+      {
+        id: crypto.randomUUID(),
+        name,
+        qty,
+        photo: null
+      }
+    ];
+
+    if (persistSavedItems(nextItems)) {
+      renderSavedItems();
+
+      toast(language === 'es'
+        ? `★ ${name} guardado`
+        : `★ ${name} saved!`);
+    }
+
+    return;
+  }
+
+  // If the input is empty, open or close Saved Items.
   if (!$('savedPanel').classList.contains('hide')) {
     closeSavedItems();
     return;
@@ -590,8 +650,6 @@ $('savedToggle').onclick = () => {
   savedEditing = false;
 
   $('savedPanel').classList.remove('hide');
-  $('savedToggle').classList.add('active');
-  $('savedToggle').textContent = '★';
 
   $('savedToggle').setAttribute(
     'aria-expanded',
@@ -600,7 +658,6 @@ $('savedToggle').onclick = () => {
 
   renderSavedItems();
 };
-
 $('savedClose').onclick = closeSavedItems;
 
 $('savedEdit').onclick = () => {
@@ -1162,6 +1219,7 @@ $('addForm').onsubmit = async e => {
   if (!name) return;
 
   $('addForm').reset();
+  updateSavedStar();
   $('itemName').focus();
 
   const success = await act('add', { name, qty });
@@ -1174,6 +1232,7 @@ $('addForm').onsubmit = async e => {
   ) {
     $('itemName').value = name;
     $('qty').value = qty;
+    updateSavedStar();
   }
 };
 $('detail').addEventListener('change',e=>{if(e.target.matches('[data-check]'))act('check',{itemId:e.target.dataset.check,done:e.target.checked})});
