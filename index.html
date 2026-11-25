@@ -648,7 +648,29 @@
   margin: 14px 0;
   font-size: 25px;
 }
+/* Purchased items in shopping history */
 
+#tripProductsPanel summary {
+  cursor: pointer;
+  font-weight: 750;
+  font-size: 14px;
+}
+
+#tripProductsList {
+  padding-left: 20px;
+  max-height: 200px;
+  overflow-y: auto;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+#tripProductsList li {
+  padding: 5px 0;
+}
+
+#tripProductsNote {
+  font-size: 12px;
+}
 </style>
 <script>
 function playDing() {
@@ -984,7 +1006,15 @@ function playDing() {
     </div>
 
   </div>
+  <details id="tripProductsPanel" class="trip-budget-summary">
+    <summary id="tripProductsHeading">
+      🛒 Items collected
+    </summary>
 
+    <ul id="tripProductsList"></ul>
+
+    <p id="tripProductsNote" class="muted"></p>
+  </details>
   <div id="tripBudgetSummary"
        class="trip-budget-summary hide">
 
@@ -2156,6 +2186,11 @@ function hasNewActivity(listId) {
 
     if (item) {
       item.done = extra.done;
+
+      if (!item.done && Array.isArray(list.shopping?.previouslyDone)) {
+        list.shopping.previouslyDone =
+          list.shopping.previouslyDone.filter(id => id !== item.id);
+      }
     }
   }
 
@@ -2855,8 +2890,14 @@ renderPriceWatch();
   let needed = 0;
   let missing = 0;
 
-   for (const item of list.items) {
-const price = resolvedItemPrice(item).cents;
+  const previouslyDone = new Set(
+    list.shopping?.previouslyDone || []
+  );
+
+  for (const item of list.items) {
+    if (item.done && previouslyDone.has(item.id)) continue;
+
+    const price = resolvedItemPrice(item).cents;
 
     if (!Number.isInteger(price) || price < 0) {
       missing++;
@@ -4539,7 +4580,38 @@ function showTripSummary(trip, budget) {
 
   $('tripSummaryClose').textContent =
     budgetText('Done ✓', 'Listo ✓');
+  // Display the saved item snapshot for this trip
+  $('tripProductsPanel').open = false;
 
+  $('tripProductsHeading').textContent =
+    budgetText('🛒 Items collected', '🛒 Artículos recogidos');
+
+  const products = Array.isArray(trip.collectedProducts)
+    ? trip.collectedProducts
+    : null;
+
+  $('tripProductsList').replaceChildren();
+
+  for (const product of products || []) {
+    const row = document.createElement('li');
+
+    row.textContent = product.name +
+      (product.qty ? ' · ' + product.qty : '');
+
+    $('tripProductsList').appendChild(row);
+  }
+
+  $('tripProductsNote').textContent = products === null
+    ? budgetText(
+        'Item details were not saved for this trip.',
+        'No se guardaron los detalles de este viaje.'
+      )
+    : products.length === 0
+      ? budgetText(
+          'No items collected.',
+          'No se recogieron artículos.'
+        )
+      : '';
   // Only display budget information when enabled
   const showBudget =
     !!budget &&
