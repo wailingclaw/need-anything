@@ -812,8 +812,16 @@ class Handler(SimpleHTTPRequestHandler):
 
             return self.reply(404, {'error': 'Not found'})
 
-        except (ValueError, TypeError, json.JSONDecodeError):
-            return self.reply(400, {'error': 'Invalid request'})
+        except (ValueError, TypeError, json.JSONDecodeError) as exc:
+            logging.warning(
+                'Invalid request on %s: %s',
+                u.path,
+                type(exc).__name__
+            )
+            return self.reply(400, {
+                'error': 'Invalid request',
+                'errorType': type(exc).__name__
+            })
         except Exception:
             logging.exception('Request failed')
             return self.reply(500, {'error': 'Server error'})
