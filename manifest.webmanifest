@@ -1,15 +1,14 @@
-
 {
   "name": "Need Anything?",
   "short_name": "Need Anything",
   "start_url": "/",
   "display": "standalone",
-"background_color": "#EDF0F2",
-"theme_color": "#EDF0F2",
+  "background_color": "#EDF0F2",
+  "theme_color": "#EDF0F2",
   "icons": [
     {
-      "src": "/needanything-logo.png",
-      "sizes": "1024x1024",
+      "src": "/needanything-logo.png?v=2",
+      "sizes": "any",
       "type": "image/png",
       "purpose": "any"
     }
