@@ -415,6 +415,60 @@
 #tripSummaryClose {
   margin-top: 20px;
   width: 100%;
+}/* Shopping History */
+
+#tripHistoryPanel {
+  margin-top: 24px;
+  background: white;
+  border: 1px solid #ddd;
+}
+
+#tripHistoryPanel summary {
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 750;
+}
+
+.trip-history-entry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 14px 0;
+  background: transparent;
+  border-radius: 0;
+  border-bottom: 1px solid #ddd;
+  text-align: left;
+}
+
+.trip-history-entry:last-child {
+  border-bottom: 0;
+}
+
+.trip-history-entry small {
+  display: block;
+  color: #666;
+  font-size: 12px;
+  font-weight: 400;
+  margin-top: 5px;
+}
+
+.trip-history-info {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.trip-history-total {
+  text-align: right;
+  flex: none;
+}
+
+#tripHistoryEntries {
+  max-height: 360px;
+  overflow-y: auto;
+  margin-top: 12px;
 }
 </style>
 <script>
@@ -611,7 +665,24 @@ function playDing() {
 </div><div class="history">
   <h2 id="needToGetHeading">Need to get</h2>
   <div id="items" class="card"></div>
-</div><div class="history"><h2 id="completedHeading">Got it ✓</h2><div id="completed" class="card"></div></div><button id="deleteList" class="outline full" style="margin-top:28px;color:#a22">Delete this list</button></section></main><!-- Shopping Trip Summary -->
+</div><div class="history"><h2 id="completedHeading">Got it ✓</h2><div id="completed" class="card"></div></div><!-- Shopping History -->
+
+<details id="tripHistoryPanel" class="card">
+
+  <summary id="tripHistoryHeading">
+    🕒 Shopping History
+  </summary>
+
+  <div id="tripHistoryEntries"></div>
+
+</details>
+
+<button id="deleteList" class="outline full" style="margin-top:28px;color:#a22">
+  Leave this shared list
+</button>
+
+</section>
+</main>
 
 <dialog id="tripSummaryDialog"
         aria-labelledby="tripSummaryTitle">
@@ -2671,6 +2742,7 @@ function render(){rememberActiveList();updatePushPanel();let list=getList();$('h
 if (!current) return;
 
 renderBudget(list);
+renderTripHistory(list);
 
 if (!list) {
   $('listTitle').textContent = t('loadingList');
@@ -2990,7 +3062,263 @@ $('items').addEventListener('pointercancel', () => {
   }
 });
 
+// Shopping History
 
+const TRIP_BUDGET_KEY =
+  'need-anything-trip-budgets-v1';
+
+let tripBudgetHistory = {};
+
+try {
+  const stored = JSON.parse(
+    localStorage.getItem(TRIP_BUDGET_KEY) || '{}'
+  );
+
+  if (
+    stored &&
+    typeof stored === 'object' &&
+    !Array.isArray(stored)
+  ) {
+    tripBudgetHistory = stored;
+  }
+} catch {
+  tripBudgetHistory = {};
+}
+
+// Identify a private trip budget
+function tripBudgetKey(listId, tripId) {
+  return JSON.stringify([listId, tripId]);
+}
+
+// Save a completed trip's private budget
+function saveTripBudget(listId, trip, budget) {
+
+  if (!budget || !trip.itemCountAccurate) return;
+
+  const prices = {};
+
+  for (const id of trip.collectedItemIds || []) {
+    prices[id] = budget.prices[id] ?? null;
+  }
+
+  const key = tripBudgetKey(listId, trip.id);
+
+  const updated = {
+    ...tripBudgetHistory,
+    [key]: {
+      limit: budget.limit,
+      prices,
+      savedAt: Date.now()
+    }
+  };
+
+  // Retain the 300 most recent private summaries
+  const next = Object.fromEntries(
+    Object.entries(updated)
+      .sort((a, b) =>
+        b[1].savedAt - a[1].savedAt
+      )
+      .slice(0, 300)
+  );
+
+  try {
+    localStorage.setItem(
+      TRIP_BUDGET_KEY,
+      JSON.stringify(next)
+    );
+
+    tripBudgetHistory = next;
+
+  } catch {
+    toast(budgetText(
+      'Could not save private trip budget.',
+      'No se pudo guardar el presupuesto del viaje.'
+    ));
+  }
+}
+
+// Retrieve a saved private budget
+function savedTripBudget(listId, tripId) {
+
+  if (!budgetForList().enabled) return null;
+
+  return tripBudgetHistory[
+    tripBudgetKey(listId, tripId)
+  ] || null;
+}
+
+// Retrieve available shopping trips
+function shoppingTrips(list) {
+
+  if (!list) return [];
+
+  const history = Array.isArray(list.tripHistory)
+    ? [...list.tripHistory]
+    : [];
+
+  // Include the latest trip from Stage 4B
+  if (
+    list.lastTrip &&
+    !history.some(
+      trip => trip.id === list.lastTrip.id
+    )
+  ) {
+    history.unshift(list.lastTrip);
+  }
+
+  return history;
+}// Display shopping history
+function renderTripHistory(list) {
+  const panel = $('tripHistoryPanel');
+
+  if (panel.dataset.listId !== String(current)) {
+    panel.open = false;
+    panel.dataset.listId = String(current);
+  }
+  $('tripHistoryHeading').textContent =
+    budgetText(
+      '🕒 Shopping History',
+      '🕒 Historial de compras'
+    );
+
+  const trips = shoppingTrips(list);
+
+  const html = trips.length
+
+    ? trips.map(trip => {
+
+        const date = new Date(
+          trip.finishedAt * 1000
+        ).toLocaleDateString(
+          language === 'es' ? 'es-US' : 'en-US',
+          {
+            month: 'long',
+            day: 'numeric',
+            year: 'numeric'
+          }
+        );
+
+        const budget = savedTripBudget(
+          current,
+          trip.id
+        );
+
+        let total = 0;
+        let missing = 0;
+
+        if (budget) {
+          for (const id of trip.collectedItemIds || []) {
+
+            const price = budget.prices[id];
+
+            if (validBudgetPrice(price)) {
+              total += price;
+            } else {
+              missing++;
+            }
+          }
+        }
+
+        const collected = trip.itemCountAccurate
+          ? trip.itemsCollected
+          : '—';
+
+        return `
+          <button
+            type="button"
+            class="trip-history-entry"
+            data-trip-id="${escapeHTML(trip.id)}"
+            ${busy ? 'disabled' : ''}
+          >
+
+            <div class="trip-history-info">
+
+              <strong>${date}</strong>
+
+              <small>
+                ${tripTime(trip.finishedAt)}
+                ·
+                ${tripDurationText(trip.durationSeconds)}
+              </small>
+
+              <small>
+                ${escapeHTML(trip.by || '')}
+                ·
+                ${collected}
+                ${budgetText(
+                  'items collected',
+                  'artículos recogidos'
+                )}
+              </small>
+
+            </div>
+
+            ${budget ? `
+              <div class="trip-history-total">
+
+                <strong>
+                  ${budgetMoney(total)}
+                </strong>
+
+                <small>
+                  ${missing
+                    ? budgetText(
+                        'Incomplete',
+                        'Incompleto'
+                      )
+                    : budgetText(
+                        'Estimated',
+                        'Estimado'
+                      )
+                  }
+                </small>
+
+              </div>
+            ` : ''}
+
+            <span aria-hidden="true">›</span>
+
+          </button>
+        `;
+
+      }).join('')
+
+    : `<p class="muted">${
+        budgetText(
+          'Your completed shopping trips will appear here.',
+          'Tus compras completadas aparecerán aquí.'
+        )
+      }</p>`;
+
+  const container = $('tripHistoryEntries');
+
+  if (container.dataset.lastHTML !== html) {
+    container.innerHTML = html;
+    container.dataset.lastHTML = html;
+  }
+}
+
+// Reopen a previous shopping summary
+$('tripHistoryEntries').addEventListener(
+  'click',
+  e => {
+
+    const button = e.target.closest('[data-trip-id]');
+
+    if (!button || busy) return;
+
+    const trip = shoppingTrips(getList()).find(
+      item => item.id === button.dataset.tripId
+    );
+
+    if (!trip) return;
+
+    showTripSummary(
+      trip,
+      savedTripBudget(current, trip.id)
+    );
+  }
+);
 // Shopping Trip Summary
 
 function tripTime(timestamp) {
@@ -3237,7 +3565,12 @@ async function finishShoppingTrip() {
 
   if (!trip || trip.id !== tripId) return;
 
+  // Save the private financial snapshot
+  saveTripBudget(listId, trip, budget);
+
   if (current !== listId) return;
+
+  renderTripHistory(getList());
 
   showTripSummary(trip, budget);
 }
