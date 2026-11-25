@@ -529,6 +529,7 @@ class Handler(SimpleHTTPRequestHandler):
                     'items': [],
                     'shopping': None,
                     'lastTrip': None,
+                    'tripHistory': [],
                     'events': []
                 }
 
@@ -790,6 +791,9 @@ class Handler(SimpleHTTPRequestHandler):
                             1 for item in items
                             if not item.get('done')
                         )
+                        # Remember the previous completed trip
+                        previous_trip = obj.get('lastTrip')
+
                         # Preserve the completed shopping trip
                         obj['lastTrip'] = {
                             'id': shop['id'],
@@ -805,7 +809,28 @@ class Handler(SimpleHTTPRequestHandler):
                             'finishedBy': person,
                             'finishedByMemberId': member_id
                         }
+                        # Preserve shopping history
+                        history = obj.get('tripHistory', [])
 
+                        if not isinstance(history, list):
+                            history = []
+                        # Preserve the latest trip from Stage 4B
+                        if previous_trip and not any(
+                            trip.get('id') == previous_trip.get('id')
+                            for trip in history
+                        ):
+                            history.insert(0, previous_trip)
+                        # Prevent duplicate trip records
+                        history = [
+                            trip for trip in history
+                            if trip.get('id') != obj['lastTrip']['id']
+                        ]
+
+                        # Store the newest trip first
+                        history.insert(0, obj['lastTrip'])
+
+                        # Retain the 100 most recent trips
+                        obj['tripHistory'] = history[:100]
                         # Close the active shopping session
                         obj['shopping'] = None
 
