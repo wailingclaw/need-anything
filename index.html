@@ -729,15 +729,15 @@
 :root {
   --app-bg: #EDF0F2;
   --app-surface: #F9FAFB;
-  --app-primary: #C9EB85;
-  --app-secondary: #E0E6EA;
+  --app-primary: #D3E6B5;
+  --app-secondary: #E4E9EC;
   --app-text: #293842;
   --app-muted: #53636D;
   --app-border: #CBD3D9;
   --app-control-border: #788994;
-  --app-accent: #68883B;
-  --app-active: #E4EFCF;
-  --app-active-border: #B9D49A;
+  --app-accent: #617C49;
+  --app-active: #E8EEDC;
+  --app-active-border: #C8D5B4;
   --app-success: #436D3A;
   --app-danger: #A12D36;
   --app-remembered: #E8EFF6;
@@ -932,6 +932,24 @@ summary:focus-visible {
 button:disabled {
   opacity: 0.55;
   cursor: default;
+}/* Lime & Slate — softer finishing touches */
+
+.logo img {
+  filter: saturate(0.40) brightness(0.96);
+}
+
+.shopping-status-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--app-accent);
+  vertical-align: middle;
+  margin-right: 4px;
+}
+
+.card {
+  box-shadow: 0 2px 8px rgba(41, 56, 66, 0.03);
 }
 </style>
 <script>
@@ -3423,7 +3441,7 @@ $('detail').addEventListener('click', e => {
 function render(){
   $('appBrand').classList.toggle('hide', !!current);
 
-  rememberActiveList();updatePushPanel();let list=getList();$('home').classList.toggle('hide',!!current);$('detail').classList.toggle('hide',!current);$('lists').innerHTML=state.links.length?state.links.map(l=>{let x=lists[l.id];return `<div class="card listcard" data-open="${escapeHTML(l.id)}" role="button" tabindex="0" style="cursor:pointer"><span><strong>${escapeHTML(x?.name||l.name||'Shared list')}</strong>${hasNewActivity(l.id)?'<span style="display:inline-block;background:var(--app-primary);color:var(--app-text);font-size:10px;font-weight:800;padding:3px 7px;border-radius:20px;margin-left:8px;vertical-align:middle">'+t('newBadge')+'</span>':''}<small>${x?x.items.filter(i=>!i.done).length+' '+t('itemsToGet')+(x.shopping?' · 🟢 '+t('shoppingNow'):''):t('connecting')}</small>${x?.updatedAt?`<small>${t('updated')} ${timeAgo(x.updatedAt)}</small>`:''}</span><span class="remove-list" data-close="${escapeHTML(l.id)}" title="${t('removeList')}" role="button" tabindex="0" aria-label="${t('removeList')}">✕</span></div>`}).join(''):`<div class="empty">${t('noLists')}</div>`;
+  rememberActiveList();updatePushPanel();let list=getList();$('home').classList.toggle('hide',!!current);$('detail').classList.toggle('hide',!current);$('lists').innerHTML=state.links.length?state.links.map(l=>{let x=lists[l.id];return `<div class="card listcard" data-open="${escapeHTML(l.id)}" role="button" tabindex="0" style="cursor:pointer"><span><strong>${escapeHTML(x?.name||l.name||'Shared list')}</strong>${hasNewActivity(l.id)?'<span style="display:inline-block;background:var(--app-primary);color:var(--app-text);font-size:10px;font-weight:800;padding:3px 7px;border-radius:20px;margin-left:8px;vertical-align:middle">'+t('newBadge')+'</span>':''}<small>${x?x.items.filter(i=>!i.done).length+' '+t('itemsToGet')+(x.shopping?' · <span class="shopping-status-dot" aria-hidden="true"></span> '+t('shoppingNow'):''):t('connecting')}</small>${x?.updatedAt?`<small>${t('updated')} ${timeAgo(x.updatedAt)}</small>`:''}</span><span class="remove-list" data-close="${escapeHTML(l.id)}" title="${t('removeList')}" role="button" tabindex="0" aria-label="${t('removeList')}">✕</span></div>`}).join(''):`<div class="empty">${t('noLists')}</div>`;
 if (!current) return;
 
 renderBudget(list);
@@ -3434,7 +3452,7 @@ if (!list) {
   $('count').textContent = '';
   return;
 }
-$('listTitle').textContent=list.name;$('count').textContent=`${list.items.filter(i=>!i.done).length} ${t('leftToGet')}`;$('shoppingBanner').classList.toggle('hide',!list.shopping);if(list.shopping)$('shoppingBanner').innerHTML=`<strong>🟢 ${escapeHTML(list.shopping.by)} ${language === 'es' ? '¡está de compras!' : 'is shopping!'}</strong><p>${list.shopping.lastCall?t('lastCallMessage'):t('addBelow')}</p>`;
+$('listTitle').textContent=list.name;$('count').textContent=`${list.items.filter(i=>!i.done).length} ${t('leftToGet')}`;$('shoppingBanner').classList.toggle('hide',!list.shopping);if(list.shopping)$('shoppingBanner').innerHTML=`<strong><span class="shopping-status-dot" aria-hidden="true"></span> ${escapeHTML(list.shopping.by)} ${language === 'es' ? '¡está de compras!' : 'is shopping!'}</strong><p>${list.shopping.lastCall?t('lastCallMessage'):t('addBelow')}</p>`;
 $('startShop').classList.toggle('hide',!!list.shopping);$('lastCall').classList.toggle('hide',!list.shopping);$('doneShop').classList.toggle('hide',!list.shopping);$('lastCall').disabled=!!list.shopping?.lastCall;
 
 
