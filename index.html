@@ -670,6 +670,48 @@
 
 #tripProductsNote {
   font-size: 12px;
+}/* Dynamic Smart Budget placement */
+
+.actions {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.actions #openBudgetPage {
+  margin: 0;
+  min-width: 0;
+  min-height: 54px;
+}
+
+/* Before shopping: beside I'm Shopping */
+
+#startShop:not(.hide) ~ #openBudgetPage {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 8px;
+  padding: 10px 12px;
+}
+
+#startShop:not(.hide) ~ #openBudgetPage
+#budgetShortcutAmounts {
+  grid-column: 1;
+  text-align: left;
+}
+
+#startShop:not(.hide) ~ #openBudgetPage
+> span:last-child {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+#budgetShortcutHeading {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* During shopping: full-width below the controls */
+
+#startShop.hide ~ #openBudgetPage {
+  grid-column: 1 / -1;
 }
 </style>
 <script>
@@ -715,7 +757,9 @@ function playDing() {
 </button>
 </header><div id="toast" class="notice hide" role="status"></div><section id="home"><div class="top"><h2>My Lists</h2><button class="primary" id="create">+ New List</button></div><div id="lists"></div><p class="footer">No accounts. No ads.</p></section><section id="detail" class="hide"><button class="back" id="back">← My Lists</button><div class="top"><div><h2 id="listTitle"></h2><p class="muted" id="count"></p></div><button class="outline" id="share">Invite ↗</button></div>
 
-<div id="shoppingBanner" class="card shopping hide"></div><div class="actions"><button class="primary" id="startShop">🛒 I'm Shopping!</button><button id="lastCall" class="hide">🔔 Last Call!</button><button id="doneShop" class="hide">✓ Done Shopping</button></div><!-- Smart Budget --><button
+<div id="shoppingBanner" class="card shopping hide"></div><div class="actions"><button class="primary" id="startShop">🛒 I'm Shopping!</button><button id="lastCall" class="hide">🔔 Last Call!</button><button id="doneShop" class="hide">✓ Done Shopping</button>
+<!-- Smart Budget -->
+<button
   type="button"
   id="openBudgetPage"
   class="outline full budget-shortcut"
@@ -732,6 +776,7 @@ function playDing() {
 
   <span aria-hidden="true">›</span>
 </button>
+</div>
 
 <dialog
   id="budgetPage"
