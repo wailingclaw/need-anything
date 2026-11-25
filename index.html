@@ -316,7 +316,107 @@
 .budget-price-group {
   flex: none;
   text-align: center;
-}</style>
+}
+
+/* Shopping Trip Summary */
+
+#tripSummaryDialog {
+  width: calc(100% - 32px);
+  max-width: 420px;
+  max-height: 85vh;
+  overflow-y: auto;
+  border: 0;
+  border-radius: 20px;
+  padding: 24px;
+}
+
+#tripSummaryDialog::backdrop {
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.trip-summary-header {
+  text-align: center;
+}
+
+.trip-summary-header h2 {
+  margin: 8px 0;
+}
+
+.trip-summary-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 60px;
+  height: 60px;
+  margin: 0 auto;
+  border-radius: 50%;
+  background: #39ff14;
+  color: #171717;
+  font-size: 30px;
+  font-weight: 800;
+}
+
+.trip-duration {
+  text-align: center;
+  padding: 16px 0;
+}
+
+.trip-duration strong {
+  display: block;
+  font-size: 32px;
+  margin-top: 4px;
+}
+
+.trip-summary-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.trip-stat {
+  background: #f5f5f5;
+  border-radius: 12px;
+  padding: 14px 8px;
+  text-align: center;
+}
+
+.trip-stat small {
+  display: block;
+  color: #666;
+  font-size: 12px;
+}
+
+.trip-stat strong {
+  display: block;
+  font-size: 20px;
+  margin-top: 5px;
+}
+
+.trip-budget-summary {
+  border-top: 1px solid #ddd;
+  padding-top: 14px;
+  margin-top: 16px;
+}
+
+.trip-budget-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+  margin: 12px 0;
+}
+
+.trip-budget-note {
+  font-size: 11px;
+  color: #666;
+}
+
+#tripSummaryClose {
+  margin-top: 20px;
+  width: 100%;
+}
+</style>
 <script>
 function playDing() {
   try {
@@ -511,7 +611,101 @@ function playDing() {
 </div><div class="history">
   <h2 id="needToGetHeading">Need to get</h2>
   <div id="items" class="card"></div>
-</div><div class="history"><h2 id="completedHeading">Got it ✓</h2><div id="completed" class="card"></div></div><button id="deleteList" class="outline full" style="margin-top:28px;color:#a22">Delete this list</button></section></main><dialog id="photoDialog">
+</div><div class="history"><h2 id="completedHeading">Got it ✓</h2><div id="completed" class="card"></div></div><button id="deleteList" class="outline full" style="margin-top:28px;color:#a22">Delete this list</button></section></main><!-- Shopping Trip Summary -->
+
+<dialog id="tripSummaryDialog"
+        aria-labelledby="tripSummaryTitle">
+
+  <div class="trip-summary-header">
+
+    <div class="trip-summary-icon">✓</div>
+
+    <h2 id="tripSummaryTitle">
+      Shopping complete!
+    </h2>
+
+    <p id="tripSummaryDate" class="muted"></p>
+
+  </div>
+
+  <div class="trip-duration">
+
+    <small id="tripDurationLabel">
+      Total shopping time
+    </small>
+
+    <strong id="tripDuration">—</strong>
+
+  </div>
+
+  <div class="trip-summary-grid">
+
+    <div class="trip-stat">
+      <small id="tripStartLabel">Started</small>
+      <strong id="tripStart">—</strong>
+    </div>
+
+    <div class="trip-stat">
+      <small id="tripFinishLabel">Finished</small>
+      <strong id="tripFinish">—</strong>
+    </div>
+
+    <div class="trip-stat">
+      <small id="tripCollectedLabel">
+        Items collected
+      </small>
+      <strong id="tripCollected">0</strong>
+    </div>
+
+    <div class="trip-stat">
+      <small id="tripRemainingLabel">
+        Items remaining
+      </small>
+      <strong id="tripRemaining">0</strong>
+    </div>
+
+  </div>
+
+  <div id="tripBudgetSummary"
+       class="trip-budget-summary hide">
+
+    <strong id="tripBudgetHeading">
+      💰 Smart Budget
+    </strong>
+
+    <div class="trip-budget-row">
+      <span id="tripBudgetLimitLabel">
+        Shopping budget
+      </span>
+      <strong id="tripBudgetLimit">—</strong>
+    </div>
+
+    <div class="trip-budget-row">
+      <span id="tripCartLabel">
+        Estimated cart total
+      </span>
+      <strong id="tripCartTotal">—</strong>
+    </div>
+
+    <div class="trip-budget-row">
+      <span id="tripBalanceLabel">
+        Estimated budget remaining
+      </span>
+      <strong id="tripBalance">—</strong>
+    </div>
+
+    <p id="tripBudgetNote"
+       class="trip-budget-note"></p>
+
+  </div>
+
+  <button type="button"
+          id="tripSummaryClose"
+          class="primary">
+    Done ✓
+  </button>
+
+</dialog><dialog id="photoDialog">
   <div class="stack">
 
     <h2 id="photoTitle">Item details</h2>
@@ -2797,10 +2991,264 @@ $('items').addEventListener('pointercancel', () => {
 });
 
 
+// Shopping Trip Summary
 
+function tripTime(timestamp) {
+  if (!Number.isFinite(timestamp)) return '—';
+
+  return new Date(timestamp * 1000)
+    .toLocaleTimeString(
+      language === 'es' ? 'es-US' : 'en-US',
+      {
+        hour: 'numeric',
+        minute: '2-digit'
+      }
+    );
+}
+
+// Format the total shopping duration
+function tripDurationText(seconds) {
+  if (!Number.isFinite(seconds)) {
+    return budgetText(
+      'Unavailable',
+      'No disponible'
+    );
+  }
+
+  if (seconds < 60) {
+    return budgetText(
+      'Less than 1 min',
+      'Menos de 1 min'
+    );
+  }
+
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  const remaining = minutes % 60;
+
+  if (hours > 0) {
+    return `${hours} h ${remaining} min`;
+  }
+
+  return `${minutes} min`;
+}
+
+// Capture private budget information
+function captureTripBudget(list) {
+  const budget = budgetForList();
+
+  if (!budget.enabled) return null;
+
+  const prices = {};
+
+  for (const item of list.items) {
+    prices[item.id] =
+      resolvedItemPrice(item).cents;
+  }
+
+  return {
+    limit: budget.limit,
+    prices
+  };
+}
+
+// Display the completed shopping trip
+function showTripSummary(trip, budget) {
+
+  if (!trip) return;
+
+  $('tripSummaryTitle').textContent =
+    budgetText(
+      'Shopping complete!',
+      '¡Compras completadas!'
+    );
+
+  $('tripSummaryDate').textContent =
+    new Date(trip.finishedAt * 1000)
+      .toLocaleDateString(
+        language === 'es' ? 'es-US' : 'en-US',
+        {
+          weekday: 'long',
+          month: 'long',
+          day: 'numeric'
+        }
+      );
+
+  $('tripDurationLabel').textContent =
+    budgetText(
+      'Total shopping time',
+      'Tiempo total de compras'
+    );
+
+  $('tripDuration').textContent =
+    tripDurationText(trip.durationSeconds);
+
+  $('tripStartLabel').textContent =
+    budgetText('Started', 'Inicio');
+
+  $('tripFinishLabel').textContent =
+    budgetText('Finished', 'Fin');
+
+  $('tripStart').textContent =
+    tripTime(trip.startedAt);
+
+  $('tripFinish').textContent =
+    tripTime(trip.finishedAt);
+
+  $('tripCollectedLabel').textContent =
+    budgetText(
+      'Items collected',
+      'Artículos recogidos'
+    );
+
+  $('tripRemainingLabel').textContent =
+    budgetText(
+      'Items remaining',
+      'Artículos pendientes'
+    );
+
+  $('tripCollected').textContent =
+    trip.itemCountAccurate
+      ? trip.itemsCollected
+      : '—';
+
+  $('tripRemaining').textContent =
+    trip.itemsRemaining ?? '—';
+
+  $('tripSummaryClose').textContent =
+    budgetText('Done ✓', 'Listo ✓');
+
+  // Only display budget information when enabled
+  const showBudget =
+    !!budget &&
+    trip.itemCountAccurate === true;
+
+  $('tripBudgetSummary').classList.toggle(
+    'hide',
+    !showBudget
+  );
+
+  if (showBudget) {
+
+    let total = 0;
+    let missing = 0;
+
+    for (const id of trip.collectedItemIds || []) {
+
+      const price = budget.prices[id];
+
+      if (validBudgetPrice(price)) {
+        total += price;
+      } else {
+        missing++;
+      }
+    }
+
+    const balance =
+      budget.limit === null || missing > 0
+        ? null
+        : budget.limit - total;
+
+    $('tripBudgetHeading').textContent =
+      budgetText(
+        '💰 Smart Budget',
+        '💰 Presupuesto inteligente'
+      );
+
+    $('tripBudgetLimitLabel').textContent =
+      budgetText(
+        'Shopping budget',
+        'Presupuesto'
+      );
+
+    $('tripCartLabel').textContent =
+      budgetText(
+        'Estimated cart total',
+        'Total estimado del carrito'
+      );
+
+    $('tripBalanceLabel').textContent =
+      budgetText(
+        'Estimated budget remaining',
+        'Presupuesto restante estimado'
+      );
+
+    $('tripBudgetLimit').textContent =
+      budget.limit === null
+        ? '—'
+        : budgetMoney(budget.limit);
+
+    $('tripCartTotal').textContent =
+      budgetMoney(total);
+
+    $('tripBalance').textContent =
+      balance === null
+        ? '—'
+        : budgetMoney(balance);
+
+    $('tripBalance').classList.toggle(
+      'budget-over',
+      balance !== null && balance < 0
+    );
+
+    $('tripBalance').classList.toggle(
+      'budget-under',
+      balance !== null && balance >= 0
+    );
+
+    $('tripBudgetNote').textContent =
+      missing > 0
+        ? budgetText(
+            `${missing} collected item(s) without prices. Estimate incomplete.`,
+            `${missing} artículo(s) sin precio. Estimación incompleta.`
+          )
+        : budgetText(
+            'Estimated prices before tax. Not actual spending.',
+            'Precios estimados antes de impuestos. No son gastos reales.'
+          );
+  }
+
+  const dialog = $('tripSummaryDialog');
+
+  if (!dialog.open) {
+    dialog.showModal();
+  }
+}
+
+// Finish shopping and display confirmed results
+async function finishShoppingTrip() {
+
+  if (busy) return;
+
+  const list = getList();
+
+  if (!list?.shopping) return;
+
+  const listId = current;
+  const tripId = list.shopping.id;
+
+  const budget = captureTripBudget(list);
+
+  const success = await act('done');
+
+  if (!success) return;
+
+  const trip = lists[listId]?.lastTrip;
+
+  if (!trip || trip.id !== tripId) return;
+
+  if (current !== listId) return;
+
+  showTripSummary(trip, budget);
+}
+
+// Dismiss the shopping summary
+$('tripSummaryClose').onclick = () => {
+  $('tripSummaryDialog').close();
+};
 $('startShop').onclick=()=>{playDing();act('start')};
 $('lastCall').onclick=()=>{playDing();act('lastCall')};
-$('doneShop').onclick=()=>act('done');
+$('doneShop').onclick = finishShoppingTrip;
 
 $('deleteList').textContent = t('leaveList');
 
