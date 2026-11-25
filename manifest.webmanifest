@@ -4,8 +4,8 @@
   "short_name": "Need Anything",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#39ff14",
+"background_color": "#EDF0F2",
+"theme_color": "#EDF0F2",
   "icons": [
     {
       "src": "/needanything-logo.png",
