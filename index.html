@@ -157,6 +157,103 @@
 
 #photoRemove {
   color: #a22;
+}/* Smart Budget */
+.budget-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  background: white;
+  border: 1px solid #ddd;
+  margin-top: 12px;
+  padding: 12px 14px;
+}
+
+.budget-track {
+  width: 42px;
+  height: 24px;
+  padding: 3px;
+  border-radius: 30px;
+  background: #ddd;
+}
+
+.budget-knob {
+  display: block;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #171717;
+  transition: transform 0.2s ease;
+}
+
+.budget-toggle[aria-checked="true"] .budget-track {
+  background: #39ff14;
+}
+
+.budget-toggle[aria-checked="true"] .budget-knob {
+  transform: translateX(18px);
+}
+
+.budget-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.budget-grid small {
+  display: block;
+  color: #666;
+  font-size: 12px;
+  margin-bottom: 5px;
+}
+
+.budget-grid strong {
+  font-size: 21px;
+  overflow-wrap: anywhere;
+}
+
+.budget-price {
+  flex: none;
+  background: #eaffdf;
+  border: 1px solid #b1ff98;
+  padding: 6px 8px;
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+.budget-price.unpriced {
+  background: white;
+  border-color: #ddd;
+  color: #666;
+}
+
+.budget-over {
+  color: #b91c1c;
+}
+
+.budget-under {
+  color: #247b16;
+}
+
+.budget-progress {
+  height: 8px;
+  background: #ddd;
+  border-radius: 20px;
+  overflow: hidden;
+  margin-top: 16px;
+}
+
+#budgetProgressFill {
+  height: 100%;
+  width: 0;
+  background: #39c914;
+  transition: width 0.2s ease;
+}
+
+#budgetNote {
+  font-size: 12px;
+  margin-bottom: 0;
 }
 </style>
 <script>
@@ -183,10 +280,7 @@ function playDing() {
     oscillator.stop(ctx.currentTime + 0.5);
     oscillator.onended = () => ctx.close();
   } catch (error) {
-    $('photoStatus').textContent = photoText(
-      'Could not save photo. Please try again.',
-      'No se pudo guardar la foto. Inténtalo de nuevo.'
-    );
+    console.warn('Could not play notification sound:', error);
   }
 }
 </script>
@@ -209,7 +303,63 @@ function playDing() {
   <div id="membersList">
     <p class="muted" style="font-size:13px">Loading members...</p>
   </div>
-</div><div id="shoppingBanner" class="card shopping hide"></div><div class="actions"><button class="primary" id="startShop">🛒 I'm Shopping!</button><button id="lastCall" class="hide">🔔 Last Call!</button><button id="doneShop" class="hide">✓ Done Shopping</button></div><form id="addForm" class="row"><input id="itemName" aria-label="Item name" placeholder="Add an item…" maxlength="100" required><input id="qty" aria-label="Quantity" placeholder="Qty" style="max-width:76px" maxlength="20"><button type="button"
+</div><div id="shoppingBanner" class="card shopping hide"></div><div class="actions"><button class="primary" id="startShop">🛒 I'm Shopping!</button><button id="lastCall" class="hide">🔔 Last Call!</button><button id="doneShop" class="hide">✓ Done Shopping</button></div><!-- Smart Budget -->
+<button
+  type="button"
+  id="budgetToggle"
+  class="budget-toggle"
+  role="switch"
+  aria-checked="false"
+  aria-controls="budgetPanel"
+>
+  <span id="budgetHeading">💰 Smart Budget</span>
+
+  <span class="budget-track" aria-hidden="true">
+    <span class="budget-knob"></span>
+  </span>
+</button>
+
+<div id="budgetPanel" class="card hide">
+
+  <button
+    type="button"
+    id="budgetSet"
+    class="outline full"
+  >
+    Set shopping budget
+  </button>
+
+  <div class="budget-grid">
+
+    <div>
+      <small id="budgetTotalLabel">Estimated total</small>
+      <strong id="budgetTotal">$0.00</strong>
+    </div>
+
+    <div>
+      <small id="budgetBalanceLabel">Projected balance</small>
+      <strong id="budgetBalance">—</strong>
+    </div>
+
+    <div>
+      <small id="budgetCartLabel">In cart</small>
+      <strong id="budgetCart">$0.00</strong>
+    </div>
+
+    <div>
+      <small id="budgetNeededLabel">Still to get</small>
+      <strong id="budgetNeeded">$0.00</strong>
+    </div>
+
+  </div>
+
+  <div class="budget-progress">
+    <div id="budgetProgressFill"></div>
+  </div>
+
+  <p id="budgetNote" class="muted"></p>
+
+</div><form id="addForm" class="row"><input id="itemName" aria-label="Item name" placeholder="Add an item…" maxlength="100" required><input id="qty" aria-label="Quantity" placeholder="Qty" style="max-width:76px" maxlength="20"><button type="button"
         id="savedToggle"
         class="saved-toggle"
         aria-label="Saved Items"
@@ -1172,10 +1322,11 @@ async function changeItemPhoto(file = null) {
       : photoText('Photo removed.', 'Foto eliminada.');
 
   } catch (error) {
-    $('photoStatus').textContent =
-      'Photo error: ' + error.message;
+    $('photoStatus').textContent = photoText(
+      'Could not save photo. Please try again.',
+      'No se pudo guardar la foto. Inténtalo de nuevo.'
+    );
 
-    console.error('Photo upload failed:', error);
 
   } finally {
     photoBusy = false;
@@ -1390,9 +1541,316 @@ senderEndpoint: await getSenderEndpoint(),
     actionRevision++;
     render();
   }
+}// Smart Budget
+const BUDGET_KEY = 'need-anything-budget-v1';
+
+let budgetData = {};
+
+try {
+  const stored = JSON.parse(
+    localStorage.getItem(BUDGET_KEY) || '{}'
+  );
+
+  if (stored && typeof stored === 'object' &&
+      !Array.isArray(stored)) {
+    budgetData = stored;
+  }
+} catch {
+  budgetData = {};
 }
+
+function budgetText(en, es) {
+  return language === 'es' ? es : en;
+}
+
+function budgetForList() {
+  return budgetData[current] || {
+    enabled: false,
+    limit: null,
+    prices: {}
+  };
+}
+
+function saveBudget(next) {
+  if (!current) return false;
+
+  const updated = {
+    ...budgetData,
+    [current]: next
+  };
+
+  try {
+    localStorage.setItem(
+      BUDGET_KEY,
+      JSON.stringify(updated)
+    );
+
+    budgetData = updated;
+    render();
+
+    return true;
+
+  } catch {
+    toast(budgetText(
+      'Could not save budget.',
+      'No se pudo guardar el presupuesto.'
+    ));
+
+    return false;
+  }
+}
+
+function budgetMoney(cents) {
+  return new Intl.NumberFormat(
+    language === 'es' ? 'es-US' : 'en-US',
+    {
+      style: 'currency',
+      currency: 'USD'
+    }
+  ).format(cents / 100);
+}
+
+function askBudgetMoney(message, previous) {
+  const answer = prompt(
+    message,
+    previous == null
+      ? ''
+      : (previous / 100).toFixed(2)
+  );
+
+  if (answer === null) return undefined;
+
+  const value = answer.trim().replace(',', '.');
+
+  if (!value) return null;
+
+  if (!/^\d+(\.\d{1,2})?$/.test(value) ||
+      Number(value) > 1000000) {
+
+    toast(budgetText(
+      'Please enter a valid dollar amount.',
+      'Introduce una cantidad válida.'
+    ));
+
+    return undefined;
+  }
+
+  return Math.round(Number(value) * 100);
+}
+
+function renderBudget(list) {
+  const budget = budgetForList();
+
+  $('budgetHeading').textContent = budgetText(
+    '💰 Smart Budget',
+    '💰 Presupuesto inteligente'
+  );
+
+  $('budgetToggle').setAttribute(
+    'aria-checked',
+    String(budget.enabled)
+  );
+
+  $('budgetToggle').disabled = !list || busy;
+
+  $('budgetPanel').classList.toggle(
+    'hide',
+    !list || !budget.enabled
+  );
+
+  if (!list || !budget.enabled) return;
+
+  let total = 0;
+  let cart = 0;
+  let needed = 0;
+  let missing = 0;
+
+  for (const item of list.items) {
+    const price = budget.prices[item.id];
+
+    if (!Number.isInteger(price) || price < 0) {
+      missing++;
+      continue;
+    }
+
+    total += price;
+
+    if (item.done) {
+      cart += price;
+    } else {
+      needed += price;
+    }
+  }
+
+  $('budgetSet').textContent =
+    budget.limit === null
+      ? budgetText(
+          'Set shopping budget',
+          'Fijar presupuesto'
+        )
+      : budgetText(
+          'Budget: ',
+          'Presupuesto: '
+        ) + budgetMoney(budget.limit);
+
+  $('budgetSet').disabled = busy;
+
+  $('budgetTotalLabel').textContent =
+    budgetText('Estimated total', 'Total estimado');
+
+  $('budgetBalanceLabel').textContent =
+    budgetText('Projected balance', 'Saldo estimado');
+
+  $('budgetCartLabel').textContent =
+    budgetText('In cart', 'En el carrito');
+
+  $('budgetNeededLabel').textContent =
+    budgetText('Still to get', 'Por comprar');
+
+  $('budgetTotal').textContent = budgetMoney(total);
+  $('budgetCart').textContent = budgetMoney(cart);
+  $('budgetNeeded').textContent = budgetMoney(needed);
+
+  const balance = budget.limit === null
+    ? null
+    : budget.limit - total;
+
+  $('budgetBalance').textContent =
+    balance === null ? '—' : budgetMoney(balance);
+
+  $('budgetBalance').classList.toggle(
+    'budget-over',
+    balance !== null && balance < 0
+  );
+
+  $('budgetBalance').classList.toggle(
+    'budget-under',
+    balance !== null && balance >= 0 && missing === 0
+  );
+
+  const percent = budget.limit > 0
+    ? Math.min(100, total / budget.limit * 100)
+    : budget.limit === 0 && total > 0 ? 100 : 0;
+
+  $('budgetProgressFill').style.width =
+    percent + '%';
+
+  $('budgetProgressFill').style.background =
+    balance !== null && balance < 0
+      ? '#b91c1c'
+      : '#39c914';
+
+  $('budgetNote').textContent = missing
+    ? budgetText(
+        `${missing} item(s) without prices. Estimate incomplete.`,
+        `${missing} artículo(s) sin precio. Estimación incompleta.`
+      )
+    : budgetText(
+        'Estimated prices before tax.',
+        'Precios estimados antes de impuestos.'
+      );
+}
+
+// Turn Smart Budget on or off
+$('budgetToggle').onclick = () => {
+  if (busy || !getList()) return;
+
+  const budget = budgetForList();
+
+  saveBudget({
+    ...budget,
+    enabled: !budget.enabled
+  });
+};
+
+// Set or change the shopping budget
+$('budgetSet').onclick = () => {
+  if (busy || !getList()) return;
+
+  const budget = budgetForList();
+
+  const limit = askBudgetMoney(
+    budgetText(
+      'Enter your shopping budget in dollars. Leave blank to clear.',
+      'Introduce tu presupuesto en dólares. Déjalo vacío para borrar.'
+    ),
+    budget.limit
+  );
+
+  if (limit === undefined) return;
+
+  saveBudget({
+    ...budget,
+    limit
+  });
+};
+
+// Display individual product prices
+function budgetPriceButton(item) {
+  const budget = budgetForList();
+
+  if (!budget.enabled) return '';
+
+  const price = budget.prices[item.id];
+  const hasPrice = Number.isInteger(price) && price >= 0;
+
+  return `
+    <button
+      type="button"
+      class="budget-price ${hasPrice ? '' : 'unpriced'}"
+      data-budget-price="${escapeHTML(item.id)}"
+      aria-label="${budgetText('Edit item price', 'Editar precio')}"
+    >
+      ${hasPrice ? budgetMoney(price) : '$ +'}
+    </button>
+  `;
+}
+
+// Edit an individual item price
+$('detail').addEventListener('click', e => {
+  const button = e.target.closest('[data-budget-price]');
+
+  if (!button || busy || !budgetForList().enabled) {
+    return;
+  }
+
+  const item = getList()?.items.find(
+    i => i.id === button.dataset.budgetPrice
+  );
+
+  if (!item) return;
+
+  const budget = budgetForList();
+
+  const price = askBudgetMoney(
+    item.name + '\n' + budgetText(
+      'Enter total price for the requested quantity. Leave blank to clear.',
+      'Introduce el precio total de la cantidad solicitada. Déjalo vacío para borrar.'
+    ),
+    budget.prices[item.id]
+  );
+
+  if (price === undefined) return;
+
+  const prices = {
+    ...budget.prices
+  };
+
+  if (price === null) {
+    delete prices[item.id];
+  } else {
+    prices[item.id] = price;
+  }
+
+  saveBudget({
+    ...budget,
+    prices
+  });
+});
 function render(){rememberActiveList();updatePushPanel();let list=getList();$('home').classList.toggle('hide',!!current);$('detail').classList.toggle('hide',!current);$('lists').innerHTML=state.links.length?state.links.map(l=>{let x=lists[l.id];return `<div class="card listcard" data-open="${escapeHTML(l.id)}" role="button" tabindex="0" style="cursor:pointer"><span><strong>${escapeHTML(x?.name||l.name||'Shared list')}</strong>${hasNewActivity(l.id)?'<span style="display:inline-block;background:#22c55e;color:#fff;font-size:10px;font-weight:800;padding:3px 7px;border-radius:20px;margin-left:8px;vertical-align:middle">'+t('newBadge')+'</span>':''}<small>${x?x.items.filter(i=>!i.done).length+' '+t('itemsToGet')+(x.shopping?' · 🟢 '+t('shoppingNow'):''):t('connecting')}</small>${x?.updatedAt?`<small>${t('updated')} ${timeAgo(x.updatedAt)}</small>`:''}</span><span class="remove-list" data-close="${escapeHTML(l.id)}" title="${t('removeList')}" role="button" tabindex="0" aria-label="${t('removeList')}">✕</span></div>`}).join(''):`<div class="empty">${t('noLists')}</div>`;
 if (!current) return;
+
+renderBudget(list);
 
 if (!list) {
   $('listTitle').textContent = t('loadingList');
@@ -1439,7 +1897,7 @@ function rows(done) {
             >
           </button>
         ` : ''}
-
+${budgetPriceButton(i)}
         ${!done && list.shopping && i.addedDuring === list.shopping.id
           ? '<span class="badge">'+t('newBadge')+'</span>'
           : ''}
@@ -1477,7 +1935,7 @@ if (!draggingItem) {
   }
 
 $('detail').querySelectorAll(
-  '[data-check], [data-remove], [data-drag], [data-photo-item], ' +
+'[data-check], [data-remove], [data-drag], [data-photo-item], [data-budget-price], ' +
   '#addForm button, #startShop, #lastCall, #doneShop'
 ).forEach(button => {
   button.disabled =
