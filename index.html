@@ -183,7 +183,10 @@ function playDing() {
     oscillator.stop(ctx.currentTime + 0.5);
     oscillator.onended = () => ctx.close();
   } catch (error) {
-    console.log("Sound unavailable:", error);
+    $('photoStatus').textContent = photoText(
+      'Could not save photo. Please try again.',
+      'No se pudo guardar la foto. Inténtalo de nuevo.'
+    );
   }
 }
 </script>
