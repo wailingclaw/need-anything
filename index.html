@@ -282,17 +282,18 @@
 .price-watch-change {
   display: block;
   font-size: 11px;
-  font-weight: 600;
-  margin-top: 4px;
+  font-weight: 500;
+  line-height: 1.3;
+  margin-top: 2px;
   white-space: nowrap;
 }
 
 .price-watch-up {
-  color: #b91c1c;
+  color: #89552f;
 }
 
 .price-watch-down {
-  color: #247b16;
+  color: #436d3a;
 }
 
 .price-watch-history {
@@ -312,7 +313,18 @@
   padding: 8px 0;
   border-bottom: 1px solid #ddd;
 }
+.price-watch-entry > div {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
 
+.price-watch-entry > strong {
+  flex: none;
+}
+
+.price-watch-entry:last-child {
+  border-bottom: 0;
+}
 .budget-price-group {
   flex: none;
   text-align: center;
@@ -2520,10 +2532,10 @@ function renderPriceWatch() {
 
   $('priceWatchToggle').disabled = busy;
 
-  $('priceWatchHint').textContent = budgetText(
-    'Recognize changes in your recorded prices.',
-    'Reconoce cambios en tus precios registrados.'
-  );
+$('priceWatchHint').textContent = budgetText(
+  'Compare your saved prices. Changes appear beside items, not live store prices.',
+  'Compara tus precios guardados. Los cambios aparecen junto a los artículos; no son precios de tiendas en tiempo real.'
+);
 
   $('priceWatchHistoryHeading').textContent =
     budgetText(
