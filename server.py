@@ -4,6 +4,10 @@ from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 import json, secrets, time, os, threading, logging
+import io
+import base64
+import requests
+from PIL import Image, ImageOps
 import psycopg
 from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool
@@ -102,7 +106,112 @@ def send_push(list_id, initiator_endpoint, message, url):
         except Exception:
             logging.exception('Push delivery error')
 
+# Item photo storage
+PHOTO_BUCKET = 'item-photos'
+MAX_PHOTO_BYTES = 200_000
 
+def storage_request(method, path, **kwargs):
+    url = os.environ['SUPABASE_URL'].rstrip('/')
+    key = os.environ['SUPABASE_SERVICE_KEY']
+
+    headers = {
+        'apikey': key
+    }
+
+    if not key.startswith('sb_secret_'):
+        headers['Authorization'] = 'Bearer ' + key
+
+    headers.update(kwargs.pop('headers', {}))
+
+    response = requests.request(
+        method,
+        url + '/storage/v1/' + path,
+        headers=headers,
+        timeout=(5, 20),
+        allow_redirects=False,
+        **kwargs
+    )
+
+    if not response.ok:
+        raise RuntimeError('Photo storage request failed')
+
+    return response
+
+
+def prepare_photo(encoded):
+    if not isinstance(encoded, str):
+        raise ValueError('Invalid photo')
+
+    if len(encoded) > 400_000:
+        raise ValueError('Photo too large')
+
+    raw = base64.b64decode(encoded, validate=True)
+
+    try:
+        with Image.open(io.BytesIO(raw)) as image:
+            if image.width * image.height > 4_000_000:
+                raise ValueError('Photo dimensions too large')
+
+            image = ImageOps.exif_transpose(image)
+            image.thumbnail((1200, 1200))
+            image = image.convert('RGB')
+
+            for quality in (85, 75, 65, 50, 35):
+                output = io.BytesIO()
+
+                image.save(
+                    output,
+                    format='JPEG',
+                    quality=quality,
+                    optimize=True
+                )
+
+                result = output.getvalue()
+
+                if len(result) <= MAX_PHOTO_BYTES:
+                    return result
+
+    except (OSError, Image.DecompressionBombError):
+        raise ValueError('Invalid image')
+
+    raise ValueError('Photo could not be compressed')
+
+
+def photo_path(lid, photo_id):
+    return f'{lid}/{photo_id}.jpg'
+
+
+def upload_photo(lid, content):
+    photo_id = token()
+
+    storage_request(
+        'POST',
+        f'object/{PHOTO_BUCKET}/{photo_path(lid, photo_id)}',
+        data=content,
+        headers={
+            'Content-Type': 'image/jpeg',
+            'x-upsert': 'false'
+        }
+    )
+
+    return photo_id
+
+
+def delete_photo(lid, photo_id):
+    if not photo_id:
+        return
+
+    try:
+        storage_request(
+            'DELETE',
+            f'object/{PHOTO_BUCKET}',
+            json={
+                'prefixes': [photo_path(lid, photo_id)]
+            }
+        )
+
+    except Exception:
+        logging.warning('Photo cleanup failed')
 class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *a, **kw):
         super().__init__(*a, directory=str(ROOT), **kw)
@@ -127,7 +236,72 @@ class Handler(SimpleHTTPRequestHandler):
 
     def do_GET(self):
         u = urlparse(self.path)
+        if u.path == '/api/photo':
+            q = parse_qs(u.query)
 
+            lid = q.get('id', [''])[0]
+            key = q.get('key', [''])[0]
+            item_id = q.get('itemId', [''])[0]
+            photo_id = q.get('photo', [''])[0]
+
+            with connect() as db:
+                row = db.execute(
+                    'SELECT secret, data FROM lists WHERE id=%s',
+                    (lid,)
+                ).fetchone()
+
+            if not row or not secrets.compare_digest(
+                row['secret'], key
+            ):
+                return self.reply(404, {
+                    'error': 'Invalid invitation'
+                })
+
+            obj = json.loads(row['data'])
+
+            item = next(
+                (
+                    x for x in obj['items']
+                    if x['id'] == item_id
+                ),
+                None
+            )
+
+            if (
+                not item
+                or not photo_id
+                or item.get('photo') != photo_id
+            ):
+                return self.reply(404, {
+                    'error': 'Photo not found'
+                })
+
+            try:
+                response = storage_request(
+                    'GET',
+                    f'object/authenticated/{PHOTO_BUCKET}/'
+                    + photo_path(lid, photo_id)
+                )
+
+                content = response.content
+
+                self.send_response(200)
+                self.send_header('Content-Type', 'image/jpeg')
+                self.send_header('Cache-Control', 'no-store')
+                self.send_header('X-Content-Type-Options', 'nosniff')
+                self.send_header('Referrer-Policy', 'no-referrer')
+                self.send_header(
+                    'Content-Length',
+                    str(len(content))
+                )
+                self.end_headers()
+                self.wfile.write(content)
+                return
+
+            except Exception:
+                return self.reply(502, {
+                    'error': 'Could not load photo'
+                })
         if u.path == '/api/list':
             q = parse_qs(u.query)
             lid = q.get('id', [''])[0]
@@ -206,6 +380,111 @@ class Handler(SimpleHTTPRequestHandler):
     def do_POST(self):
         u = urlparse(self.path)
         try:
+            if u.path == '/api/photo':
+                n = int(
+                    self.headers.get('Content-Length', '0')
+                )
+
+                if n <= 0 or n > 410_000:
+                    return self.reply(413, {
+                        'error': 'Photo request too large'
+                    })
+
+                data = json.loads(self.rfile.read(n))
+
+                lid = str(data.get('id', ''))
+                key = str(data.get('key', ''))
+                item_id = str(data.get('itemId', ''))
+                encoded = data.get('image')
+
+                new_photo = None
+                old_photo = None
+
+                try:
+                    with LOCK, connect() as db:
+                        row = db.execute(
+                            'SELECT secret, data FROM lists '
+                            'WHERE id=%s FOR UPDATE',
+                            (lid,)
+                        ).fetchone()
+
+                        if not row or not secrets.compare_digest(
+                            row['secret'], key
+                        ):
+                            return self.reply(404, {
+                                'error': 'Invalid invitation'
+                            })
+
+                        obj = json.loads(row['data'])
+
+                        item = next(
+                            (
+                                x for x in obj['items']
+                                if x['id'] == item_id
+                            ),
+                            None
+                        )
+
+                        if not item:
+                            return self.reply(404, {
+                                'error': 'Item not found'
+                            })
+
+                        old_photo = item.get('photo')
+
+                        if encoded is not None:
+                            photo_count = sum(
+                                bool(x.get('photo'))
+                                for x in obj['items']
+                            )
+
+                            if not old_photo and photo_count >= 50:
+                                return self.reply(400, {
+                                    'error': 'List photo limit reached'
+                                })
+
+                            content = prepare_photo(encoded)
+
+                            new_photo = upload_photo(
+                                lid, content
+                            )
+
+                        item['photo'] = new_photo
+
+                        now = time.time()
+
+                        obj['events'].append({
+                            'id': token(),
+                            'type': 'photo',
+                            'by': str(
+                                data.get('person', 'Someone')
+                            )[:40],
+                            'memberId': str(
+                                data.get('memberId', '')
+                            )[:100],
+                            'at': now
+                        })
+
+                        obj['events'] = obj['events'][-100:]
+
+                        db.execute(
+                            'UPDATE lists SET data=%s, '
+                            'updated=%s WHERE id=%s',
+                            (json.dumps(obj), now, lid)
+                        )
+
+                except Exception:
+                    if new_photo:
+                        delete_photo(lid, new_photo)
+                    raise
+
+                if old_photo:
+                    delete_photo(lid, old_photo)
+
+                return self.reply(200, {
+                    'list': obj,
+                    'version': now
+                })
             data = self.read_json()
             if u.path == '/api/member':
                 lid = str(data.get('id', ''))
@@ -365,6 +644,7 @@ class Handler(SimpleHTTPRequestHandler):
                 lid = str(data.get('id', ''))
                 key = str(data.get('key', ''))
                 action = data.get('action')
+                removed_photo = None
                 person = str(data.get('person', 'Someone')).strip()[:40] or 'Someone'
                 member_id = str(data.get('memberId', ''))[:100]
                 with LOCK, connect() as db:
@@ -426,8 +706,20 @@ class Handler(SimpleHTTPRequestHandler):
                         item['done'] = bool(data.get('done'))
 
                     elif action == 'remove':
+                        removed_item = next(
+                            (
+                                x for x in items
+                                if x['id'] == data.get('itemId')
+                            ),
+                            None
+                        )
+
+                        if removed_item:
+                            removed_photo = removed_item.get('photo')
+
                         obj['items'] = [
-                            x for x in items if x['id'] != data.get('itemId')
+                            x for x in items
+                            if x['id'] != data.get('itemId')
                         ]
 
                     elif action == 'start':
@@ -500,7 +792,8 @@ class Handler(SimpleHTTPRequestHandler):
                         'UPDATE lists SET data=%s, updated=%s WHERE id=%s',
                         (json.dumps(obj), now, lid)
                     )
-
+                if removed_photo:
+                    delete_photo(lid, removed_photo)
                 if action in ('start', 'lastCall'):
                     message = (
                         f'{person} is shopping! Need anything?'
