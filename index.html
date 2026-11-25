@@ -469,8 +469,105 @@
   max-height: 360px;
   overflow-y: auto;
   margin-top: 12px;
+}/* Spending Insights */
+
+#spendingInsights {
+  margin: 16px 0;
+  padding: 14px;
+  background: #f6f6f6;
+  border-radius: 14px;
 }
-</style>
+
+#spendingInsights summary {
+  cursor: pointer;
+  font-weight: 750;
+}
+
+.insights-period {
+  display: flex;
+  gap: 8px;
+  margin: 14px 0;
+}
+
+.insights-period button {
+  flex: 1;
+  font-size: 12px;
+  padding: 10px 6px;
+  background: white;
+  border: 1px solid #ddd;
+}
+
+.insights-period button.active {
+  background: #39ff14;
+  border-color: #39ff14;
+}
+
+.insights-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.insight-stat {
+  background: white;
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.insight-stat small {
+  display: block;
+  color: #666;
+  font-size: 11px;
+  margin-bottom: 6px;
+}
+
+.insight-stat strong {
+  font-size: 20px;
+  overflow-wrap: anywhere;
+}
+
+#insightsNote {
+  font-size: 11px;
+  color: #666;
+  line-height: 1.5;
+}
+/* Receipt Scanning */
+
+#receiptPanel {
+  border-top: 1px solid #ddd;
+  margin-top: 18px;
+  padding-top: 14px;
+}
+
+#receiptPanel summary {
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 750;
+}
+
+.receipt-actions {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.receipt-actions button {
+  font-size: 13px;
+}
+
+#receiptStatus {
+  font-size: 12px;
+  color: #666;
+  overflow-wrap: anywhere;
+}
+
+#receiptActual {
+  font-size: 22px;
+}
+
+#receiptClear {
+  color: #a22;
+}</style>
 <script>
 function playDing() {
   try {
@@ -672,7 +769,36 @@ function playDing() {
   <summary id="tripHistoryHeading">
     🕒 Shopping History
   </summary>
+<!-- Spending Insights -->
 
+<details id="spendingInsights" class="hide">
+
+  <summary id="insightsHeading">
+    📊 Spending Insights
+  </summary>
+
+  <div class="insights-period">
+
+    <button type="button"
+            id="insightsMonth"
+            class="active">
+      This month
+    </button>
+
+    <button type="button"
+            id="insightsAll">
+      All history
+    </button>
+
+  </div>
+
+  <div id="insightsGrid"
+       class="insights-grid">
+  </div>
+
+  <p id="insightsNote"></p>
+
+</details>
   <div id="tripHistoryEntries"></div>
 
 </details>
@@ -769,7 +895,66 @@ function playDing() {
        class="trip-budget-note"></p>
 
   </div>
+</head><!-- Receipt Scanning -->
 
+<details id="receiptPanel" class="hide">
+
+  <summary id="receiptHeading">
+    🧾 Receipt
+  </summary>
+
+  <div class="trip-budget-row">
+
+    <span id="receiptActualLabel">
+      Actual total
+    </span>
+
+    <strong id="receiptActual">—</strong>
+
+  </div>
+
+  <div class="trip-budget-row">
+
+    <span id="receiptBalanceLabel">
+      Actual budget remaining
+    </span>
+
+    <strong id="receiptBalance">—</strong>
+
+  </div>
+
+  <input type="file"
+         id="receiptFile"
+         accept="image/*"
+         class="hide">
+
+  <div class="receipt-actions">
+
+    <button type="button"
+            id="receiptScan"
+            class="outline">
+      📷 Scan receipt
+    </button>
+
+    <button type="button"
+            id="receiptManual"
+            class="outline">
+      Enter actual total
+    </button>
+
+    <button type="button"
+            id="receiptClear"
+            class="outline hide">
+      Remove actual total
+    </button>
+
+  </div>
+
+  <p id="receiptStatus"
+     role="status">
+  </p>
+
+</details>
   <button type="button"
           id="tripSummaryClose"
           class="primary">
@@ -3167,8 +3352,735 @@ function shoppingTrips(list) {
   }
 
   return history;
-}// Display shopping history
+}
+
+// Receipt Scanning
+
+const RECEIPT_KEY =
+  'need-anything-receipts-v1';
+
+let receiptHistory = {};
+let receiptTarget = null;
+let receiptBusy = false;
+let receiptLibrary = null;
+
+try {
+
+  const stored = JSON.parse(
+    localStorage.getItem(RECEIPT_KEY) || '{}'
+  );
+
+  if (
+    stored &&
+    typeof stored === 'object' &&
+    !Array.isArray(stored)
+  ) {
+    receiptHistory = stored;
+  }
+
+} catch {
+  receiptHistory = {};
+}
+
+function actualTripTotal(listId, tripId) {
+
+  const record = receiptHistory[
+    tripBudgetKey(listId, tripId)
+  ];
+
+  return validBudgetPrice(record?.total)
+    ? record.total
+    : null;
+}
+
+function saveActualTripTotal(target, total) {
+
+  if (
+    total !== null &&
+    !validBudgetPrice(total)
+  ) return false;
+
+  const key = tripBudgetKey(
+    target.listId,
+    target.trip.id
+  );
+
+  const updated = {...receiptHistory};
+
+  if (total === null) {
+
+    delete updated[key];
+
+  } else {
+
+    updated[key] = {
+      total,
+      savedAt: Date.now()
+    };
+  }
+
+  const next = Object.fromEntries(
+    Object.entries(updated)
+      .sort((a, b) =>
+        b[1].savedAt - a[1].savedAt
+      )
+      .slice(0, 300)
+  );
+
+  try {
+
+    localStorage.setItem(
+      RECEIPT_KEY,
+      JSON.stringify(next)
+    );
+
+    receiptHistory = next;
+
+    return true;
+
+  } catch {
+
+    toast(budgetText(
+      'Could not save receipt total.',
+      'No se pudo guardar el total.'
+    ));
+
+    return false;
+  }
+}
+
+function renderReceiptPanel(trip, budget) {
+
+  receiptTarget = {
+    listId: current,
+    trip,
+    budget
+  };
+
+  $('receiptPanel').classList.toggle(
+    'hide',
+    !budgetForList().enabled
+  );
+
+  $('receiptHeading').textContent =
+    budgetText('🧾 Receipt', '🧾 Recibo');
+
+  $('receiptActualLabel').textContent =
+    budgetText('Actual total', 'Total real');
+
+  $('receiptBalanceLabel').textContent =
+    budgetText(
+      'Actual budget remaining',
+      'Presupuesto restante real'
+    );
+
+  $('receiptScan').textContent =
+    budgetText(
+      '📷 Scan receipt',
+      '📷 Escanear recibo'
+    );
+
+  $('receiptManual').textContent =
+    budgetText(
+      'Enter actual total',
+      'Introducir total real'
+    );
+
+  $('receiptClear').textContent =
+    budgetText(
+      'Remove actual total',
+      'Eliminar total real'
+    );
+
+  const total = actualTripTotal(
+    current, trip.id
+  );
+
+  const balance =
+    total !== null &&
+    validBudgetPrice(budget?.limit)
+
+      ? budget.limit - total
+
+      : null;
+
+  $('receiptActual').textContent =
+    total === null
+      ? '—'
+      : budgetMoney(total);
+
+  $('receiptBalance').textContent =
+    balance === null
+      ? '—'
+      : budgetMoney(balance);
+
+  $('receiptBalance').classList.toggle(
+    'budget-over',
+    balance !== null && balance < 0
+  );
+
+  $('receiptBalance').classList.toggle(
+    'budget-under',
+    balance !== null && balance >= 0
+  );
+
+  $('receiptClear').classList.toggle(
+    'hide', total === null
+  );
+}
+
+function refreshReceiptViews(target) {
+
+  if (
+    current !== target.listId ||
+    receiptTarget?.trip.id !== target.trip.id
+  ) return;
+
+  renderReceiptPanel(
+    target.trip,
+    target.budget
+  );
+
+  renderTripHistory(getList());
+}
+
+function confirmReceiptTotal(target, suggestion) {
+
+  const total = askBudgetMoney(
+
+    budgetText(
+      'Confirm the actual receipt total, including tax.',
+      'Confirma el total real del recibo, incluidos los impuestos.'
+    ),
+
+    suggestion
+  );
+
+  if (
+    total === undefined ||
+    total === null
+  ) return;
+
+  if (saveActualTripTotal(target, total)) {
+
+    refreshReceiptViews(target);
+
+    $('receiptStatus').textContent =
+      budgetText(
+        '✓ Actual total saved.',
+        '✓ Total real guardado.'
+      );
+  }
+}
+
+function loadReceiptLibrary() {
+
+  if (window.Tesseract) {
+    return Promise.resolve(window.Tesseract);
+  }
+
+  if (!receiptLibrary) {
+
+    receiptLibrary = new Promise(
+      (resolve, reject) => {
+
+        const script =
+          document.createElement('script');
+
+        script.src =
+          'https://cdn.jsdelivr.net/npm/tesseract.js@6.0.1/dist/tesseract.min.js';
+
+        script.onload = () => {
+
+          if (window.Tesseract) {
+            resolve(window.Tesseract);
+          } else {
+            script.remove();
+            reject(new Error('OCR unavailable'));
+          }
+        };
+
+        script.onerror = () => {
+
+          script.remove();
+
+          reject(
+            new Error('Could not load OCR')
+          );
+        };
+
+        document.head.appendChild(script);
+      }
+    ).catch(error => {
+
+      receiptLibrary = null;
+
+      throw error;
+    });
+  }
+
+  return receiptLibrary;
+}
+
+function detectReceiptTotal(text) {
+
+  const candidates = [];
+
+  for (const line of text.split(/\r?\n/)) {
+
+    if (
+      !/\b(total|amount due|grand total|balance due|total a pagar)\b/i.test(line)
+    ) continue;
+
+    if (
+      /\b(subtotal|sub total|tax|change|savings|discount|cash|tendered|items)\b/i.test(line)
+    ) continue;
+
+    const amounts = line.match(
+      /\d[\d,]*\.\d{2}\b/g
+    );
+
+    if (!amounts?.length) continue;
+
+    const amount = Number(
+      amounts[amounts.length - 1]
+        .replace(/,/g, '')
+    );
+
+    const cents = Math.round(amount * 100);
+
+    if (validBudgetPrice(cents)) {
+
+      candidates.push(cents);
+    }
+  }
+
+  const unique = [...new Set(candidates)];
+
+  return unique.length === 1
+    ? unique[0]
+    : null;
+}
+
+$('receiptScan').onclick = () => {
+
+  if (!receiptBusy && receiptTarget) {
+    $('receiptFile').click();
+  }
+};
+
+$('receiptManual').onclick = () => {
+
+  if (receiptBusy || !receiptTarget) return;
+
+  const target = receiptTarget;
+
+  confirmReceiptTotal(
+    target,
+    actualTripTotal(
+      target.listId,
+      target.trip.id
+    )
+  );
+};
+
+$('receiptClear').onclick = () => {
+
+  if (receiptBusy || !receiptTarget) return;
+
+  if (!confirm(budgetText(
+    'Remove this actual total?',
+    '¿Eliminar este total real?'
+  ))) return;
+
+  const target = receiptTarget;
+
+  if (saveActualTripTotal(target, null)) {
+
+    refreshReceiptViews(target);
+
+    $('receiptStatus').textContent = '';
+  }
+};
+
+$('receiptFile').onchange = async () => {
+
+  const file = $('receiptFile').files[0];
+
+  $('receiptFile').value = '';
+
+  if (
+    !file ||
+    receiptBusy ||
+    !receiptTarget
+  ) return;
+
+  if (
+    file.size > 20_000_000 ||
+    !file.type.startsWith('image/')
+  ) {
+
+    $('receiptStatus').textContent =
+      budgetText(
+        'Choose an image smaller than 20 MB.',
+        'Elige una imagen menor de 20 MB.'
+      );
+
+    return;
+  }
+
+  const target = receiptTarget;
+
+  receiptBusy = true;
+
+  $('receiptScan').disabled = true;
+  $('receiptManual').disabled = true;
+  $('receiptClear').disabled = true;
+  $('tripSummaryClose').disabled = true;
+
+  let worker = null;
+
+  try {
+
+    $('receiptStatus').textContent =
+      budgetText(
+        'Preparing receipt scanner…',
+        'Preparando escáner…'
+      );
+
+    const Tesseract =
+      await loadReceiptLibrary();
+
+    worker = await Tesseract.createWorker(
+      'eng'
+    );
+
+    $('receiptStatus').textContent =
+      budgetText(
+        'Reading receipt…',
+        'Leyendo recibo…'
+      );
+
+    const result = await worker.recognize(file);
+
+    const detected = detectReceiptTotal(
+      result.data.text
+    );
+
+    if (
+      current !== target.listId ||
+      receiptTarget?.trip.id !== target.trip.id ||
+      !$('tripSummaryDialog').open
+    ) return;
+
+    $('receiptStatus').textContent =
+      detected === null
+
+        ? budgetText(
+            'Total uncertain. Enter it manually.',
+            'Total incierto. Introdúcelo manualmente.'
+          )
+
+        : budgetText(
+            'Check the detected total before saving.',
+            'Verifica el total detectado antes de guardar.'
+          );
+
+    confirmReceiptTotal(target, detected);
+
+  } catch {
+
+    $('receiptStatus').textContent =
+      budgetText(
+        'Could not scan receipt. You can enter the total manually.',
+        'No se pudo escanear el recibo. Puedes introducir el total manualmente.'
+      );
+
+  } finally {
+
+    if (worker) {
+
+      try {
+        await worker.terminate();
+      } catch {}
+    }
+
+    receiptBusy = false;
+
+    $('receiptScan').disabled = false;
+    $('receiptManual').disabled = false;
+    $('receiptClear').disabled = false;
+    $('tripSummaryClose').disabled = false;
+  }
+};
+
+$('tripSummaryDialog').addEventListener(
+  'cancel',
+  event => {
+
+    if (receiptBusy) event.preventDefault();
+  }
+);
+// Spending Insights
+
+let insightsPeriod = 'month';
+
+function tripEstimate(trip, budget) {
+
+  if (!budget || !trip.itemCountAccurate) {
+    return null;
+  }
+
+  let total = 0;
+
+  for (const id of trip.collectedItemIds || []) {
+
+    const price = budget.prices[id];
+
+    if (!validBudgetPrice(price)) {
+      return null;
+    }
+
+    total += price;
+  }
+
+  return total;
+}
+
+function renderSpendingInsights(list) {
+
+  const enabled =
+    !!list && budgetForList().enabled;
+
+  $('spendingInsights').classList.toggle(
+    'hide', !enabled
+  );
+
+  if (!enabled) return;
+
+  $('insightsHeading').textContent =
+    budgetText(
+      '📊 Spending Insights',
+      '📊 Análisis de gastos'
+    );
+
+  $('insightsMonth').textContent =
+    budgetText('This month', 'Este mes');
+
+  $('insightsAll').textContent =
+    budgetText('All history', 'Todo el historial');
+
+  $('insightsMonth').classList.toggle(
+    'active', insightsPeriod === 'month'
+  );
+
+  $('insightsAll').classList.toggle(
+    'active', insightsPeriod === 'all'
+  );
+
+  const now = new Date();
+
+  const trips = shoppingTrips(list).filter(trip => {
+
+    if (insightsPeriod === 'all') return true;
+
+    const date = new Date(
+      trip.finishedAt * 1000
+    );
+
+    return (
+      date.getFullYear() === now.getFullYear() &&
+      date.getMonth() === now.getMonth()
+    );
+  });
+
+  let estimatedTotal = 0;
+  let estimatedTrips = 0;
+  let actualTotal = 0;
+  let actualTrips = 0;
+  let durationTotal = 0;
+  let timedTrips = 0;
+
+  let itemsCollected = 0;
+  let countedTrips = 0;
+
+  let budgetBalance = 0;
+  let budgetedTrips = 0;
+
+  for (const trip of trips) {
+    const actual = actualTripTotal(
+      current, trip.id
+    );
+
+    if (actual !== null) {
+
+      actualTotal += actual;
+      actualTrips++;
+    }
+    if (Number.isFinite(trip.durationSeconds)) {
+
+      durationTotal += trip.durationSeconds;
+      timedTrips++;
+    }
+
+    if (trip.itemCountAccurate) {
+
+      itemsCollected += trip.itemsCollected;
+      countedTrips++;
+    }
+
+    const budget = savedTripBudget(
+      current, trip.id
+    );
+
+    const estimate = tripEstimate(
+      trip, budget
+    );
+
+    if (estimate === null) continue;
+
+    estimatedTotal += estimate;
+    estimatedTrips++;
+
+    if (validBudgetPrice(budget.limit)) {
+
+      budgetBalance += budget.limit - estimate;
+      budgetedTrips++;
+    }
+  }
+
+  const averageCost = estimatedTrips
+    ? budgetMoney(
+        Math.round(
+          estimatedTotal / estimatedTrips
+        )
+      )
+    : '—';
+
+  const averageTime = timedTrips
+    ? tripDurationText(
+        Math.round(durationTotal / timedTrips)
+      )
+    : '—';
+
+  const stats = [
+    [
+      budgetText(
+        'Actual spending',
+        'Gastos reales'
+      ),
+      actualTrips
+        ? budgetMoney(actualTotal)
+        : '—'
+    ],
+
+    [
+      budgetText(
+        'Average actual cost',
+        'Costo real promedio'
+      ),
+      actualTrips
+        ? budgetMoney(
+            Math.round(actualTotal / actualTrips)
+          )
+        : '—'
+    ],
+    [
+      budgetText(
+        'Estimated spending',
+        'Gastos estimados'
+      ),
+      estimatedTrips
+        ? budgetMoney(estimatedTotal)
+        : '—'
+    ],
+
+    [
+      budgetText(
+        'Shopping trips',
+        'Viajes de compras'
+      ),
+      trips.length
+    ],
+
+    [
+      budgetText(
+        'Average estimated cost',
+        'Costo estimado promedio'
+      ),
+      averageCost
+    ],
+
+    [
+      budgetText(
+        'Average shopping time',
+        'Tiempo promedio de compras'
+      ),
+      averageTime
+    ],
+
+    [
+      budgetText(
+        'Items collected',
+        'Artículos recogidos'
+      ),
+      countedTrips ? itemsCollected : '—'
+    ],
+
+    [
+      budgetText(
+        'Estimated net budget balance',
+        'Saldo neto estimado'
+      ),
+      budgetedTrips
+        ? budgetMoney(budgetBalance)
+        : '—'
+    ]
+
+  ];
+
+  const html = stats.map(([label, value]) => `
+    <div class="insight-stat">
+      <small>${escapeHTML(label)}</small>
+      <strong>${escapeHTML(value)}</strong>
+    </div>
+  `).join('');
+
+  const grid = $('insightsGrid');
+
+  if (grid.dataset.lastHTML !== html) {
+
+    grid.innerHTML = html;
+    grid.dataset.lastHTML = html;
+  }
+
+  $('insightsNote').textContent =
+    budgetText(
+
+      `${actualTrips} of ${trips.length} trips have confirmed totals. ${estimatedTrips} have complete estimates. Actual and estimated spending are separate, not additive. History is limited to retained trips.`,
+
+      `${actualTrips} de ${trips.length} viajes tienen totales confirmados. ${estimatedTrips} tienen estimaciones completas. Los gastos reales y estimados no se suman. Historial limitado a viajes guardados.`
+
+    );
+}
+
+$('insightsMonth').onclick = () => {
+
+  insightsPeriod = 'month';
+
+  renderSpendingInsights(getList());
+};
+
+$('insightsAll').onclick = () => {
+
+  insightsPeriod = 'all';
+
+  renderSpendingInsights(getList());
+};
+// Display shopping history
 function renderTripHistory(list) {
+  renderSpendingInsights(list);
+
   const panel = $('tripHistoryPanel');
 
   if (panel.dataset.listId !== String(current)) {
@@ -3384,6 +4296,12 @@ function captureTripBudget(list) {
 function showTripSummary(trip, budget) {
 
   if (!trip) return;
+
+  $('receiptPanel').open = false;
+
+  $('receiptStatus').textContent = '';
+
+  renderReceiptPanel(trip, budget);
 
   $('tripSummaryTitle').textContent =
     budgetText(
