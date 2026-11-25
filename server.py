@@ -61,7 +61,14 @@ def token():
     return secrets.token_urlsafe(24)
 
 
-def send_push(list_id, initiator_endpoint, message, url, message_es=None):
+def send_push(
+    list_id,
+    initiator_endpoint,
+    message,
+    url,
+    message_es=None,
+    target_member_id=None
+):
     private = os.environ.get('VAPID_PRIVATE_KEY', '')
     email = os.environ.get('VAPID_CONTACT_EMAIL', '')
     if not private or not email:
@@ -84,6 +91,14 @@ def send_push(list_id, initiator_endpoint, message, url, message_es=None):
             continue
         try:
             subscription = json.loads(row['subscription'])
+
+            recipient_member_id = subscription.pop('memberId', '')
+
+            if (
+                target_member_id is not None
+                and recipient_member_id != target_member_id
+            ):
+                continue
 
             recipient_language = subscription.pop('language', 'en')
 
@@ -579,6 +594,10 @@ class Handler(SimpleHTTPRequestHandler):
                     'es' if data.get('language') == 'es'
                     else 'en'
                 )
+
+                sub['memberId'] = str(
+                    data.get('memberId', '')
+                )[:100]
                 with LOCK, connect() as db:
                     row = db.execute(
                         'SELECT secret FROM lists WHERE id=%s',
@@ -780,13 +799,70 @@ class Handler(SimpleHTTPRequestHandler):
                             return self.reply(409, {'error': 'Last Call already sent'})
 
                         shop['lastCall'] = True
+                        shop['lastCallAt'] = now
+                        shop['lastCallResponses'] = {}
                         obj['events'].append({
                             'id': token(),
                             'type': 'lastCall',
                             'by': person,
                             'at': now
                         })
+                    elif action == 'lastCallResponse':
+                        if not shop or not shop.get('lastCall'):
+                            return self.reply(409, {
+                                'error': 'No active Last Call'
+                            })
 
+                        if data.get('tripId') != shop['id']:
+                            return self.reply(409, {
+                                'error': 'Shopping trip has changed'
+                            })
+
+                        if not member_id:
+                            return self.reply(400, {
+                                'error': 'Member ID required'
+                            })
+
+                        if member_id == shop.get('memberId'):
+                            return self.reply(400, {
+                                'error': 'Shopper cannot respond to own Last Call'
+                            })
+
+                        member = db.execute(
+                            'SELECT name FROM list_members '
+                            'WHERE list_id=%s AND member_id=%s',
+                            (lid, member_id)
+                        ).fetchone()
+
+                        if not member:
+                            return self.reply(403, {
+                                'error': 'List member not found'
+                            })
+
+                        response = data.get('response')
+
+                        if response not in ('good', 'adding'):
+                            return self.reply(400, {
+                                'error': 'Invalid Last Call response'
+                            })
+
+                        responses = shop.setdefault(
+                            'lastCallResponses', {}
+                        )
+
+                        previous = responses.get(member_id, {})
+
+                        if previous.get('response') == response:
+                            return self.reply(200, {
+                                'list': obj,
+                                'version': now
+                            })
+
+                        responses[member_id] = {
+                            'name': member['name'],
+                            'response': response,
+                            'at': now
+                        }
                     elif action == 'done':
                         if not shop:
                             return self.reply(409, {'error': 'No active shopping trip'})
@@ -932,6 +1008,34 @@ class Handler(SimpleHTTPRequestHandler):
                         '/?list=' + lid + '&key=' + key,
                         message_es
                     )
+
+                if action == 'lastCallResponse':
+                    shopper_id = shop.get('memberId')
+
+                    if shopper_id:
+                        responder = responses[member_id]['name']
+
+                        message = (
+                            f"{responder}: I'm good, thank you!"
+                            if response == 'good'
+                            else f'{responder} is adding something!'
+                        )
+
+                        message_es = (
+                            f'{responder}: ¡No necesito nada más, gracias!'
+                            if response == 'good'
+                            else f'¡{responder} está agregando algo!'
+                        )
+
+                        PUSH_POOL.submit(
+                            send_push,
+                            lid,
+                            str(data.get('senderEndpoint', '')),
+                            message,
+                            '/?list=' + lid + '&key=' + key,
+                            message_es,
+                            shopper_id
+                        )
 
                 return self.reply(200, {'list': obj, 'version': now})
 
