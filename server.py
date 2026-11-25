@@ -818,10 +818,7 @@ class Handler(SimpleHTTPRequestHandler):
                 u.path,
                 type(exc).__name__
             )
-            return self.reply(400, {
-                'error': 'Invalid request',
-                'errorType': type(exc).__name__
-            })
+            return self.reply(400, {'error': 'Invalid request'})
         except Exception:
             logging.exception('Request failed')
             return self.reply(500, {'error': 'Server error'})
