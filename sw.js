@@ -10,7 +10,7 @@ self.addEventListener('push', event => {
       data.title || 'Need Anything?',
       {
         body: data.body || 'Your list has an update',
-        icon: '/icon.svg',
+        icon: '/needanything-logo.png',
         badge: '/icon.svg',
         data: {
           url: data.url || '/'
