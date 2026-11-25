@@ -1423,7 +1423,7 @@ $('needToGetHeading').textContent =
 }
 
 
-$('languageSwitch').onclick = () => {
+$('languageSwitch').onclick = async () => {
   language = language === 'en' ? 'es' : 'en';
 
   localStorage.setItem(LANGUAGE_KEY, language);
@@ -1432,6 +1432,19 @@ $('languageSwitch').onclick = () => {
   renderSavedItems();
   render();
   loadMembers();
+
+  if (notificationPermission() === 'granted' && pushRegistration) {
+    const results = await Promise.allSettled(
+      state.links.map(link => subscribeList(link))
+    );
+
+    if (results.some(result => result.status === 'rejected')) {
+      toast(budgetText(
+        'Notification language could not sync. Reopen the app to retry.',
+        'No se pudo actualizar el idioma de las notificaciones. Vuelve a abrir la app.'
+      ));
+    }
+  }
 };
 
 applyLanguage();const notificationPermission = () =>
@@ -3301,7 +3314,29 @@ $('detail').querySelectorAll(
 
 function b64bytes(base64){const padded=base64.replace(/-/g,'+').replace(/_/g,'/').padEnd(Math.ceil(base64.length/4)*4,'=');return Uint8Array.from(atob(padded),c=>c.charCodeAt(0))}
 async function getSenderEndpoint(){try{if(!pushRegistration)return '';const s=await pushRegistration.pushManager.getSubscription();return s?.endpoint||''}catch{return ''}}
-async function subscribeList(l){if(!pushRegistration)return;const s=await pushRegistration.pushManager.getSubscription();if(s)await api('/api/subscribe',{id:l.id,key:l.key,subscription:s.toJSON()})}
+let pushSubscriptionQueue = Promise.resolve();
+
+function subscribeList(l) {
+  const request = pushSubscriptionQueue.then(async () => {
+    if (!pushRegistration) return;
+    if (notificationPermission() !== 'granted') return;
+
+    const s = await pushRegistration.pushManager.getSubscription();
+
+    if (!s || !state.links.some(link => link.id === l.id)) return;
+
+    await api('/api/subscribe', {
+      id: l.id,
+      key: l.key,
+      subscription: s.toJSON(),
+      language: language
+    });
+  });
+
+  pushSubscriptionQueue = request.catch(() => {});
+
+  return request;
+}
 async function enableNotifications(){try{
  if(!window.isSecureContext||!('serviceWorker' in navigator)||!('PushManager' in window)){toast(language === 'es' ? 'Las notificaciones requieren HTTPS y un navegador compatible.' : 'Notifications need HTTPS and a supported browser.');return}
  if(notificationPermission()==='denied'){toast(language === 'es' ? 'Las notificaciones están bloqueadas en tu navegador.' : 'Notifications are blocked in your browser settings.');return}
