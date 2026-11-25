@@ -1169,9 +1169,10 @@ async function changeItemPhoto(file = null) {
       : photoText('Photo removed.', 'Foto eliminada.');
 
   } catch (error) {
-    $('photoStatus').textContent = photoText(
-      'Could not save photo. Please try again.',
-      'No se pudo guardar la foto. Inténtalo de nuevo.'
+    $('photoStatus').textContent =
+      'Photo error: ' + error.message;
+
+    console.error('Photo upload failed:', error);
     );
 
   } finally {
