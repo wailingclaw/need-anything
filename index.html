@@ -3636,13 +3636,10 @@ function renderReceiptPanel(trip, budget) {
     budget
   };
 
-  $('receiptPanel').classList.toggle(
-    'hide',
-    !budgetForList().enabled
-  );
+$('receiptPanel').classList.remove('hide');
 
-  $('receiptHeading').textContent =
-    budgetText('🧾 Receipt', '🧾 Recibo');
+$('receiptHeading').textContent =
+  budgetText('🧾 Add Receipt', '🧾 Añadir recibo');
 
   $('receiptActualLabel').textContent =
     budgetText('Actual total', 'Total real');
