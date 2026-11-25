@@ -61,7 +61,7 @@ def token():
     return secrets.token_urlsafe(24)
 
 
-def send_push(list_id, initiator_endpoint, message, url):
+def send_push(list_id, initiator_endpoint, message, url, message_es=None):
     private = os.environ.get('VAPID_PRIVATE_KEY', '')
     email = os.environ.get('VAPID_CONTACT_EMAIL', '')
     if not private or not email:
@@ -83,11 +83,21 @@ def send_push(list_id, initiator_endpoint, message, url):
         if row['endpoint'] == initiator_endpoint:
             continue
         try:
+            subscription = json.loads(row['subscription'])
+
+            recipient_language = subscription.pop('language', 'en')
+
+            body = (
+                message_es
+                if recipient_language == 'es' and message_es
+                else message
+            )
+
             webpush(
-                subscription_info=json.loads(row['subscription']),
+                subscription_info=subscription,
                 data=json.dumps({
                     'title': 'Need Anything?',
-                    'body': message,
+                    'body': body,
                     'url': url
                 }),
                 vapid_private_key=private,
@@ -563,7 +573,12 @@ class Handler(SimpleHTTPRequestHandler):
                 )
                 if not valid:
                     return self.reply(400, {'error': 'Invalid subscription'})
+                sub = dict(sub)
 
+                sub['language'] = (
+                    'es' if data.get('language') == 'es'
+                    else 'en'
+                )
                 with LOCK, connect() as db:
                     row = db.execute(
                         'SELECT secret FROM lists WHERE id=%s',
@@ -902,12 +917,20 @@ class Handler(SimpleHTTPRequestHandler):
                         if action == 'start'
                         else f'{person} is almost finished! Anything else?'
                     )
+
+                    message_es = (
+                        f'¡{person} está de compras! ¿Necesitas algo?'
+                        if action == 'start'
+                        else f'¡{person} está por terminar! ¿Algo más?'
+                    )
+
                     PUSH_POOL.submit(
                         send_push,
                         lid,
                         str(data.get('senderEndpoint', '')),
                         message,
-                        '/?list=' + lid + '&key=' + key
+                        '/?list=' + lid + '&key=' + key,
+                        message_es
                     )
 
                 return self.reply(200, {'list': obj, 'version': now})
