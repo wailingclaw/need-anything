@@ -528,6 +528,7 @@ class Handler(SimpleHTTPRequestHandler):
                     'name': name,
                     'items': [],
                     'shopping': None,
+                    'lastTrip': None,
                     'events': []
                 }
 
@@ -729,7 +730,9 @@ class Handler(SimpleHTTPRequestHandler):
                         obj['shopping'] = {
                             'id': token(),
                             'by': person,
-                            'lastCall': False
+                            'memberId': member_id,
+                            'lastCall': False,
+                            'startedAt': now
                         }
                         obj['events'].append({
                             'id': token(),
@@ -756,7 +759,32 @@ class Handler(SimpleHTTPRequestHandler):
                         if not shop:
                             return self.reply(409, {'error': 'No active shopping trip'})
 
+                        started_at = shop.get('startedAt')
+
+                        # Calculate shopping duration
+                        duration = None
+
+                        if isinstance(started_at, (int, float)):
+                            duration = max(
+                                0,
+                                int(now - started_at)
+                            )
+
+                        # Preserve the completed shopping trip
+                        obj['lastTrip'] = {
+                            'id': shop['id'],
+                            'by': shop.get('by', person),
+                            'memberId': shop.get('memberId', ''),
+                            'startedAt': started_at,
+                            'finishedAt': now,
+                            'durationSeconds': duration,
+                            'finishedBy': person,
+                            'finishedByMemberId': member_id
+                        }
+
+                        # Close the active shopping session
                         obj['shopping'] = None
+
                         obj['events'].append({
                             'id': token(),
                             'type': 'done',
