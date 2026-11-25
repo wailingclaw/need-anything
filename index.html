@@ -567,7 +567,89 @@
 
 #receiptClear {
   color: #a22;
-}</style>
+}
+
+/* Refined shopping list layout */
+
+#detail > .top {
+  margin-top: 12px;
+}
+
+#detail #count {
+  margin: 6px 0 0;
+}
+
+#detail #addForm {
+  margin-top: 14px;
+}/* Dedicated Smart Budget page */
+
+.budget-shortcut {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 10px 0 14px;
+  padding: 10px 14px;
+  text-align: left;
+  min-height: 48px;
+}
+
+#budgetShortcutHeading {
+  flex: 1;
+  font-size: 14px;
+}
+
+#budgetShortcutAmounts {
+  text-align: right;
+  min-width: 0;
+}
+
+#budgetShortcutAmounts strong {
+  display: block;
+  font-size: 17px;
+  overflow-wrap: anywhere;
+}
+
+#budgetShortcutAmounts small {
+  display: block;
+  color: #666;
+  font-size: 10px;
+  font-weight: 500;
+}
+
+#budgetPage {
+  position: fixed;
+  inset: 0;
+  margin: 0 auto;
+  width: 100%;
+  max-width: 620px;
+  height: 100%;
+  height: 100dvh;
+  max-height: 100dvh;
+  padding: 24px 18px 70px;
+  border: 0;
+  border-radius: 0;
+  background: white;
+  color: #171717;
+  overflow-y: auto;
+  box-sizing: border-box;
+  overscroll-behavior: contain;
+}
+
+#budgetPage::backdrop {
+  background: white;
+}
+
+.budget-page-header {
+  margin-bottom: 20px;
+}
+
+.budget-page-header h2 {
+  margin: 14px 0;
+  font-size: 25px;
+}
+
+</style>
 <script>
 function playDing() {
   try {
@@ -597,7 +679,7 @@ function playDing() {
 }
 </script>
 </head>
-<body><main class="wrap"><header class="brand"><div class="logo"><img src="/needanything-logo.png" alt="Need Anything? logo" style="width:42px;height:42px;object-fit:contain;display:block"></div><div><h1>Need Anything?</h1><p class="muted">Shopping is better together.</p></div><button type="button"
+<body><main class="wrap"><header class="brand" id="appBrand"><div class="logo"><img src="/needanything-logo.png" alt="Need Anything? logo" style="width:42px;height:42px;object-fit:contain;display:block"></div><div><h1>Need Anything?</h1><p class="muted">Shopping is better together.</p></div><button type="button"
         id="languageSwitch"
         class="language-switch"
         role="switch"
@@ -609,13 +691,43 @@ function playDing() {
   </span>
   <span>ES</span>
 </button>
-</header><div id="toast" class="notice hide" role="status"></div><section id="home"><div class="top"><h2>My Lists</h2><button class="primary" id="create">+ New List</button></div><div id="lists"></div><p class="footer">No accounts. No ads.</p></section><section id="detail" class="hide"><button class="back" id="back">← My Lists</button><div class="top"><div><h2 id="listTitle"></h2><p class="muted" id="count"></p></div><button class="outline" id="share">Invite ↗</button></div><div class="card" id="pushPanel"><strong>Shopping alerts</strong><p class="muted" style="font-size:13px">Get alerts when someone starts shopping or sends a last call.</p><button id="enablePush" class="outline full">Enable notifications</button><p class="muted" id="pushStatus" style="font-size:12px"></p></div>
-<div class="card" id="membersPanel">
-<strong id="membersHeading">👥 Members</strong>
-  <div id="membersList">
-    <p class="muted" style="font-size:13px">Loading members...</p>
+</header><div id="toast" class="notice hide" role="status"></div><section id="home"><div class="top"><h2>My Lists</h2><button class="primary" id="create">+ New List</button></div><div id="lists"></div><p class="footer">No accounts. No ads.</p></section><section id="detail" class="hide"><button class="back" id="back">← My Lists</button><div class="top"><div><h2 id="listTitle"></h2><p class="muted" id="count"></p></div><button class="outline" id="share">Invite ↗</button></div>
+
+<div id="shoppingBanner" class="card shopping hide"></div><div class="actions"><button class="primary" id="startShop">🛒 I'm Shopping!</button><button id="lastCall" class="hide">🔔 Last Call!</button><button id="doneShop" class="hide">✓ Done Shopping</button></div><!-- Smart Budget --><button
+  type="button"
+  id="openBudgetPage"
+  class="outline full budget-shortcut"
+  aria-haspopup="dialog"
+>
+  <span id="budgetShortcutHeading">
+    💰 Smart Budget
+  </span>
+
+  <span id="budgetShortcutAmounts" class="hide">
+    <strong id="budgetShortcutCart">$0.00</strong>
+    <small id="budgetShortcutCartLabel">In cart</small>
+  </span>
+
+  <span aria-hidden="true">›</span>
+</button>
+
+<dialog
+  id="budgetPage"
+  aria-labelledby="budgetPageTitle"
+>
+  <div class="budget-page-header">
+    <button
+      type="button"
+      id="closeBudgetPage"
+      class="back"
+    >
+      ← Back to list
+    </button>
+
+    <h2 id="budgetPageTitle">
+      Smart Budget
+    </h2>
   </div>
-</div><div id="shoppingBanner" class="card shopping hide"></div><div class="actions"><button class="primary" id="startShop">🛒 I'm Shopping!</button><button id="lastCall" class="hide">🔔 Last Call!</button><button id="doneShop" class="hide">✓ Done Shopping</button></div><!-- Smart Budget -->
 <button
   type="button"
   id="budgetToggle"
@@ -721,7 +833,11 @@ function playDing() {
 
   <div id="priceWatchEntries"></div>
 
-</details></div><form id="addForm" class="row"><input id="itemName" aria-label="Item name" placeholder="Add an item…" maxlength="100" required><input id="qty" aria-label="Quantity" placeholder="Qty" style="max-width:76px" maxlength="20"><button type="button"
+</details>
+</div>
+</dialog>
+
+<form id="addForm" class="row"><input id="itemName" aria-label="Item name" placeholder="Add an item…" maxlength="100" required><input id="qty" aria-label="Quantity" placeholder="Qty" style="max-width:76px" maxlength="20"><button type="button"
         id="savedToggle"
         class="saved-toggle"
         aria-label="Saved Items"
@@ -801,7 +917,13 @@ function playDing() {
 </details>
   <div id="tripHistoryEntries"></div>
 
-</details>
+</details><div class="card" id="pushPanel"><strong>Shopping alerts</strong><p class="muted" style="font-size:13px">Get alerts when someone starts shopping or sends a last call.</p><button id="enablePush" class="outline full">Enable notifications</button><p class="muted" id="pushStatus" style="font-size:12px"></p></div>
+<div class="card" id="membersPanel">
+  <strong id="membersHeading">👥 Members</strong>
+  <div id="membersList">
+    <p class="muted" style="font-size:13px">Loading members...</p>
+  </div>
+</div>
 
 <button id="deleteList" class="outline full" style="margin-top:28px;color:#a22">
   Leave this shared list
@@ -895,7 +1017,7 @@ function playDing() {
        class="trip-budget-note"></p>
 
   </div>
-</head><!-- Receipt Scanning -->
+<!-- Receipt Scanning -->
 
 <details id="receiptPanel" class="hide">
 
@@ -2671,6 +2793,41 @@ function askBudgetMoney(message, previous) {
 function renderBudget(list) {
   const budget = budgetForList();
 
+  $('budgetShortcutHeading').textContent =
+    budgetText(
+      '💰 Smart Budget',
+      '💰 Presupuesto inteligente'
+    );
+
+  $('budgetPageTitle').textContent =
+    budgetText(
+      'Smart Budget',
+      'Presupuesto inteligente'
+    );
+
+  $('closeBudgetPage').textContent =
+    budgetText(
+      '← Back to list',
+      '← Volver a la lista'
+    );
+
+  $('budgetShortcutCartLabel').textContent =
+    budgetText(
+      'In cart',
+      'En el carrito'
+    );
+
+  $('openBudgetPage').disabled = !list || busy;
+
+  $('budgetShortcutAmounts').classList.toggle(
+    'hide',
+    !list || !budget.enabled
+  );
+
+  if (!list && $('budgetPage').open) {
+    $('budgetPage').close();
+  }
+
   $('budgetHeading').textContent = budgetText(
     '💰 Smart Budget',
     '💰 Presupuesto inteligente'
@@ -2742,7 +2899,11 @@ const price = resolvedItemPrice(item).cents;
 
   $('budgetTotal').textContent = budgetMoney(total);
   $('budgetCart').textContent = budgetMoney(cart);
-  $('budgetNeeded').textContent = budgetMoney(needed);
+$('budgetShortcutCart').textContent =
+  budgetMoney(cart);
+
+$('budgetNeeded').textContent =
+  budgetMoney(needed);
 
   const balance = budget.limit === null
     ? null
@@ -2783,7 +2944,22 @@ const price = resolvedItemPrice(item).cents;
         'Precios estimados antes de impuestos.'
       );
 }
+// Open the dedicated Smart Budget page
+$('openBudgetPage').onclick = () => {
+  if (!getList() || busy) return;
 
+  renderBudget(getList());
+
+  if (!$('budgetPage').open) {
+    $('budgetPage').showModal();
+    $('budgetPage').scrollTop = 0;
+  }
+};
+
+// Return to the shopping list
+$('closeBudgetPage').onclick = () => {
+  $('budgetPage').close();
+};
 // Turn Smart Budget on or off
 $('budgetToggle').onclick = () => {
   if (busy || !getList()) return;
@@ -2923,7 +3099,10 @@ $('detail').addEventListener('click', e => {
     render();
   }
 });
-function render(){rememberActiveList();updatePushPanel();let list=getList();$('home').classList.toggle('hide',!!current);$('detail').classList.toggle('hide',!current);$('lists').innerHTML=state.links.length?state.links.map(l=>{let x=lists[l.id];return `<div class="card listcard" data-open="${escapeHTML(l.id)}" role="button" tabindex="0" style="cursor:pointer"><span><strong>${escapeHTML(x?.name||l.name||'Shared list')}</strong>${hasNewActivity(l.id)?'<span style="display:inline-block;background:#22c55e;color:#fff;font-size:10px;font-weight:800;padding:3px 7px;border-radius:20px;margin-left:8px;vertical-align:middle">'+t('newBadge')+'</span>':''}<small>${x?x.items.filter(i=>!i.done).length+' '+t('itemsToGet')+(x.shopping?' · 🟢 '+t('shoppingNow'):''):t('connecting')}</small>${x?.updatedAt?`<small>${t('updated')} ${timeAgo(x.updatedAt)}</small>`:''}</span><span class="remove-list" data-close="${escapeHTML(l.id)}" title="${t('removeList')}" role="button" tabindex="0" aria-label="${t('removeList')}">✕</span></div>`}).join(''):`<div class="empty">${t('noLists')}</div>`;
+function render(){
+  $('appBrand').classList.toggle('hide', !!current);
+
+  rememberActiveList();updatePushPanel();let list=getList();$('home').classList.toggle('hide',!!current);$('detail').classList.toggle('hide',!current);$('lists').innerHTML=state.links.length?state.links.map(l=>{let x=lists[l.id];return `<div class="card listcard" data-open="${escapeHTML(l.id)}" role="button" tabindex="0" style="cursor:pointer"><span><strong>${escapeHTML(x?.name||l.name||'Shared list')}</strong>${hasNewActivity(l.id)?'<span style="display:inline-block;background:#22c55e;color:#fff;font-size:10px;font-weight:800;padding:3px 7px;border-radius:20px;margin-left:8px;vertical-align:middle">'+t('newBadge')+'</span>':''}<small>${x?x.items.filter(i=>!i.done).length+' '+t('itemsToGet')+(x.shopping?' · 🟢 '+t('shoppingNow'):''):t('connecting')}</small>${x?.updatedAt?`<small>${t('updated')} ${timeAgo(x.updatedAt)}</small>`:''}</span><span class="remove-list" data-close="${escapeHTML(l.id)}" title="${t('removeList')}" role="button" tabindex="0" aria-label="${t('removeList')}">✕</span></div>`}).join(''):`<div class="empty">${t('noLists')}</div>`;
 if (!current) return;
 
 renderBudget(list);
