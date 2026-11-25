@@ -705,7 +705,18 @@ class Handler(SimpleHTTPRequestHandler):
                         )
                         if not item:
                             return self.reply(404, {'error': 'Item not found'})
+
                         item['done'] = bool(data.get('done'))
+
+                        # Allow previously checked items to
+                        # count when collected again during a trip.
+                        if shop and not item['done']:
+                            if isinstance(shop.get('previouslyDone'), list):
+                                shop['previouslyDone'] = [
+                                    item_id
+                                    for item_id in shop['previouslyDone']
+                                    if item_id != item['id']
+                                ]
 
                     elif action == 'remove':
                         removed_item = next(
@@ -780,11 +791,20 @@ class Handler(SimpleHTTPRequestHandler):
                             shop.get('previouslyDone', [])
                         )
 
-                        collected_items = [
-                            item['id']
+                        collected_products = [
+                            {
+                                'id': item['id'],
+                                'name': item['name'],
+                                'qty': item.get('qty', '')
+                            }
                             for item in items
                             if item.get('done')
                             and item['id'] not in previously_done
+                        ]
+
+                        collected_items = [
+                            item['id']
+                            for item in collected_products
                         ]
 
                         remaining_items = sum(
@@ -804,6 +824,11 @@ class Handler(SimpleHTTPRequestHandler):
                             'durationSeconds': duration,
                             'itemsCollected': len(collected_items),
                             'collectedItemIds': collected_items,
+                            'collectedProducts': (
+                                collected_products
+                                if 'previouslyDone' in shop
+                                else None
+                            ),
                             'itemsRemaining': remaining_items,
                             'itemCountAccurate': 'previouslyDone' in shop,
                             'finishedBy': person,
