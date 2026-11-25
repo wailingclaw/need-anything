@@ -732,7 +732,12 @@ class Handler(SimpleHTTPRequestHandler):
                             'by': person,
                             'memberId': member_id,
                             'lastCall': False,
-                            'startedAt': now
+                            'startedAt': now,
+                            'previouslyDone': [
+                                item['id']
+                                for item in items
+                                if item.get('done')
+                            ]
                         }
                         obj['events'].append({
                             'id': token(),
@@ -769,7 +774,22 @@ class Handler(SimpleHTTPRequestHandler):
                                 0,
                                 int(now - started_at)
                             )
+                        # Calculate items collected during this trip
+                        previously_done = set(
+                            shop.get('previouslyDone', [])
+                        )
 
+                        collected_items = [
+                            item['id']
+                            for item in items
+                            if item.get('done')
+                            and item['id'] not in previously_done
+                        ]
+
+                        remaining_items = sum(
+                            1 for item in items
+                            if not item.get('done')
+                        )
                         # Preserve the completed shopping trip
                         obj['lastTrip'] = {
                             'id': shop['id'],
@@ -778,6 +798,10 @@ class Handler(SimpleHTTPRequestHandler):
                             'startedAt': started_at,
                             'finishedAt': now,
                             'durationSeconds': duration,
+                            'itemsCollected': len(collected_items),
+                            'collectedItemIds': collected_items,
+                            'itemsRemaining': remaining_items,
+                            'itemCountAccurate': 'previouslyDone' in shop,
                             'finishedBy': person,
                             'finishedByMemberId': member_id
                         }
