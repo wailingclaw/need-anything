@@ -272,6 +272,50 @@
   font-size: 11px;
   color: #666;
   margin: 8px 0 0;
+}/* Price Watch */
+.price-watch-toggle {
+  margin-top: 10px;
+  font-size: 13px;
+  padding: 10px 12px;
+}
+
+.price-watch-change {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  margin-top: 4px;
+  white-space: nowrap;
+}
+
+.price-watch-up {
+  color: #b91c1c;
+}
+
+.price-watch-down {
+  color: #247b16;
+}
+
+.price-watch-history {
+  margin-top: 10px;
+  font-size: 12px;
+}
+
+.price-watch-history summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.price-watch-entry {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid #ddd;
+}
+
+.budget-price-group {
+  flex: none;
+  text-align: center;
 }</style>
 <script>
 function playDing() {
@@ -395,7 +439,38 @@ function playDing() {
 <p id="priceMemoryHint" class="price-memory-hint">
   Remember prices for future shopping trips.
 </p>
-</div><form id="addForm" class="row"><input id="itemName" aria-label="Item name" placeholder="Add an item…" maxlength="100" required><input id="qty" aria-label="Quantity" placeholder="Qty" style="max-width:76px" maxlength="20"><button type="button"
+<!-- Price Watch -->
+<button
+  type="button"
+  id="priceWatchToggle"
+  class="budget-toggle price-watch-toggle"
+  role="switch"
+  aria-checked="false"
+  aria-controls="priceWatchHistory"
+>
+  <span id="priceWatchHeading">
+    📊 Price Watch
+  </span>
+
+  <span class="budget-track" aria-hidden="true">
+    <span class="budget-knob"></span>
+  </span>
+</button>
+
+<p id="priceWatchHint" class="price-memory-hint">
+  Recognize changes in your recorded prices.
+</p>
+
+<details id="priceWatchHistory"
+         class="price-watch-history hide">
+
+  <summary id="priceWatchHistoryHeading">
+    Recent price changes
+  </summary>
+
+  <div id="priceWatchEntries"></div>
+
+</details></div><form id="addForm" class="row"><input id="itemName" aria-label="Item name" placeholder="Add an item…" maxlength="100" required><input id="qty" aria-label="Quantity" placeholder="Qty" style="max-width:76px" maxlength="20"><button type="button"
         id="savedToggle"
         class="saved-toggle"
         aria-label="Saved Items"
@@ -1617,7 +1692,305 @@ try {
 } catch {
   priceMemory = {};
 }
+// Price Watch
+const PRICE_WATCH_KEY =
+  'need-anything-price-watch-v1';
 
+const PRICE_WATCH_ENABLED_KEY =
+  'need-anything-price-watch-enabled';
+
+let priceWatchEnabled = false;
+let priceWatchHistory = {};
+
+try {
+  const stored = JSON.parse(
+    localStorage.getItem(PRICE_WATCH_KEY) || '{}'
+  );
+
+  if (stored && typeof stored === 'object' &&
+      !Array.isArray(stored)) {
+    priceWatchHistory = stored;
+  }
+
+  priceWatchEnabled =
+    localStorage.getItem(
+      PRICE_WATCH_ENABLED_KEY
+    ) === 'true';
+
+} catch {
+  priceWatchHistory = {};
+}
+
+// Record a manually entered price
+function recordPriceWatch(item, price) {
+  if (!priceWatchEnabled ||
+      !validBudgetPrice(price)) return;
+
+  const key = priceMemoryKey(item);
+
+  const history = Array.isArray(priceWatchHistory[key])
+    ? [...priceWatchHistory[key]]
+    : [];
+
+  const previous = priceMemory[key];
+
+  // Use Price Memory as an initial baseline
+  if (!history.length &&
+      validBudgetPrice(previous?.cents)) {
+
+    history.push({
+      cents: previous.cents,
+      at: previous.updatedAt,
+      name: item.name,
+      qty: item.qty || ''
+    });
+  }
+
+  const last = history[history.length - 1];
+
+  // Do not record identical consecutive prices
+  if (last && last.cents === price) return;
+
+  history.push({
+    cents: price,
+    at: Date.now(),
+    name: item.name,
+    qty: item.qty || ''
+  });
+
+  const updated = {
+    ...priceWatchHistory,
+    [key]: history.slice(-20)
+  };
+
+  // Keep the 500 most recent product combinations
+  const entries = Object.entries(updated)
+    .filter(([, values]) =>
+      Array.isArray(values) && values.length
+    )
+    .sort((a, b) =>
+      b[1][b[1].length - 1].at -
+      a[1][a[1].length - 1].at
+    )
+    .slice(0, 500);
+
+  const next = Object.fromEntries(entries);
+
+  try {
+    localStorage.setItem(
+      PRICE_WATCH_KEY,
+      JSON.stringify(next)
+    );
+
+    priceWatchHistory = next;
+
+  } catch {
+    toast(budgetText(
+      'Could not save price history.',
+      'No se pudo guardar el historial de precios.'
+    ));
+  }
+}
+
+// Compare the two latest recorded prices
+function getPriceChange(item) {
+  if (!priceWatchEnabled) return null;
+
+  const history = priceWatchHistory[
+    priceMemoryKey(item)
+  ];
+
+  if (!Array.isArray(history) ||
+      history.length < 2) return null;
+
+  const previous = history[history.length - 2];
+  const latest = history[history.length - 1];
+
+  if (!validBudgetPrice(previous.cents) ||
+      !validBudgetPrice(latest.cents)) return null;
+
+  return {
+    previous: previous.cents,
+    latest: latest.cents,
+    difference: latest.cents - previous.cents,
+    at: latest.at
+  };
+}
+
+// Format dollar-only price changes
+function priceChangeText(change) {
+  if (change.difference === 0) return '';
+
+  const arrow = change.difference > 0
+    ? '↑'
+    : '↓';
+
+  return arrow + ' ' +
+    budgetMoney(Math.abs(change.difference));
+}
+
+// Display the latest price change beside an item
+function priceWatchBadge(item, displayedPrice) {
+  const change = getPriceChange(item);
+
+  if (!change ||
+      change.difference === 0 ||
+      change.latest !== displayedPrice) return '';
+
+  const color = change.difference > 0
+    ? 'price-watch-up'
+    : 'price-watch-down';
+
+  return `
+    <small
+      class="price-watch-change ${color}"
+      title="${budgetText(
+        'Previously',
+        'Anteriormente'
+      )}: ${budgetMoney(change.previous)}"
+    >
+      ${priceChangeText(change)}
+    </small>
+  `;
+}
+
+// Render Price Watch settings and history
+function renderPriceWatch() {
+  $('priceWatchHeading').textContent = budgetText(
+    '📊 Price Watch',
+    '📊 Seguimiento de precios'
+  );
+
+  $('priceWatchToggle').setAttribute(
+    'aria-checked',
+    String(priceWatchEnabled)
+  );
+
+  $('priceWatchToggle').disabled = busy;
+
+  $('priceWatchHint').textContent = budgetText(
+    'Recognize changes in your recorded prices.',
+    'Reconoce cambios en tus precios registrados.'
+  );
+
+  $('priceWatchHistoryHeading').textContent =
+    budgetText(
+      'Recent price changes',
+      'Cambios recientes de precios'
+    );
+
+  $('priceWatchHistory').classList.toggle(
+    'hide',
+    !priceWatchEnabled
+  );
+
+  if (!priceWatchEnabled) return;
+
+  const changes = [];
+
+  for (const history of Object.values(priceWatchHistory)) {
+    if (!Array.isArray(history)) continue;
+
+    for (let i = 1; i < history.length; i++) {
+      const previous = history[i - 1];
+      const latest = history[i];
+
+      if (!validBudgetPrice(previous.cents) ||
+          !validBudgetPrice(latest.cents)) continue;
+
+      const difference =
+        latest.cents - previous.cents;
+
+      if (difference === 0) continue;
+
+      changes.push({
+        name: latest.name,
+        qty: latest.qty,
+        previous: previous.cents,
+        latest: latest.cents,
+        difference,
+        at: latest.at
+      });
+    }
+  }
+
+  changes.sort((a, b) => b.at - a.at);
+
+  const html = changes.length
+    ? changes.slice(0, 20).map(change => {
+
+        const color = change.difference > 0
+          ? 'price-watch-up'
+          : 'price-watch-down';
+
+        const date = new Date(change.at)
+          .toLocaleDateString(
+            language === 'es' ? 'es-US' : 'en-US'
+          );
+
+        return `
+          <div class="price-watch-entry">
+            <div>
+              <strong>
+                ${escapeHTML(change.name)}
+              </strong>
+
+              <div class="muted">
+                ${change.qty
+                  ? escapeHTML(change.qty) + ' · '
+                  : ''}
+                ${date}
+              </div>
+
+              <div>
+                ${budgetMoney(change.previous)}
+                →
+                ${budgetMoney(change.latest)}
+              </div>
+            </div>
+
+            <strong class="${color}">
+              ${priceChangeText(change)}
+            </strong>
+          </div>
+        `;
+      }).join('')
+    : `<p class="muted">${budgetText(
+        'Price changes will appear here as you update prices.',
+        'Los cambios aparecerán aquí cuando actualices los precios.'
+      )}</p>`;
+
+  const container = $('priceWatchEntries');
+
+  if (container.dataset.lastHTML !== html) {
+    container.innerHTML = html;
+    container.dataset.lastHTML = html;
+  }
+}
+
+// Turn Price Watch on or off
+$('priceWatchToggle').onclick = () => {
+  if (busy || !getList() ||
+      !budgetForList().enabled) return;
+
+  const next = !priceWatchEnabled;
+
+  try {
+    localStorage.setItem(
+      PRICE_WATCH_ENABLED_KEY,
+      String(next)
+    );
+
+    priceWatchEnabled = next;
+    render();
+
+  } catch {
+    toast(budgetText(
+      'Could not save preference.',
+      'No se pudo guardar la preferencia.'
+    ));
+  }
+};
 // Normalize product name and quantity
 function priceMemoryKey(item) {
   const normalize = value =>
@@ -1868,6 +2241,7 @@ function renderBudget(list) {
   if (!list || !budget.enabled) return;
 
   renderPriceMemory();
+renderPriceWatch();
 
   let total = 0;
   let cart = 0;
@@ -2021,21 +2395,28 @@ function budgetPriceButton(item) {
       );
 
   return `
-    <button
-      type="button"
-      class="budget-price ${priceClass}"
-      data-budget-price="${escapeHTML(item.id)}"
-      aria-label="${label}"
-      title="${label}"
-    >
+    <div class="budget-price-group">
+
+      <button
+        type="button"
+        class="budget-price ${priceClass}"
+        data-budget-price="${escapeHTML(item.id)}"
+        aria-label="${label}"
+        title="${label}"
+      >
+        ${hasPrice
+          ? (resolved.remembered ? '~' : '') +
+            budgetMoney(price)
+          : '$ +'}
+      </button>
+
       ${hasPrice
-        ? (resolved.remembered ? '~' : '') + budgetMoney(price)
-        : '$ +'}
-    </button>
+        ? priceWatchBadge(item, price)
+        : ''}
+
+    </div>
   `;
 }
-
-
 // Edit an individual item price
 $('detail').addEventListener('click', e => {
   const button = e.target.closest('[data-budget-price]');
@@ -2077,8 +2458,18 @@ $('detail').addEventListener('click', e => {
 
   if (!success) return;
 
-  if (price !== null && priceMemoryEnabled) {
-    rememberItemPrice(item, price);
+  if (price !== null) {
+
+    // Record the price before updating Price Memory
+    if (priceWatchEnabled) {
+      recordPriceWatch(item, price);
+    }
+
+    // Remember the latest price
+    if (priceMemoryEnabled) {
+      rememberItemPrice(item, price);
+    }
+
     render();
   }
 });
