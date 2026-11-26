@@ -1024,6 +1024,33 @@ button:disabled {
 
 .last-call-good {
   color: var(--app-success);
+}/* Backup & Restore */
+
+#openBackup {
+  margin-top: 24px;
+  font-size: 13px;
+  background: var(--app-surface);
+  color: var(--app-muted);
+}
+
+#backupDialog {
+  max-height: 90dvh;
+  overflow-y: auto;
+}
+
+#backupDialog p {
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+#backupStatus {
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  color: var(--app-muted);
+}
+
+#backupDialog button {
+  width: 100%;
 }
 </style>
 <script>
@@ -1067,7 +1094,16 @@ function playDing() {
   </span>
   <span>ES</span>
 </button>
-</header><div id="toast" class="notice hide" role="status"></div><section id="home"><div class="top"><h2>My Lists</h2><button class="primary" id="create">+ New List</button></div><div id="lists"></div><p class="footer">No accounts. No ads.</p></section><section id="detail" class="hide"><button class="back" id="back">← My Lists</button><div class="top"><div><h2 id="listTitle"></h2><p class="muted" id="count"></p></div><button class="outline" id="share">Invite ↗</button></div>
+</header><div id="toast" class="notice hide" role="status"></div><section id="home"><div class="top"><h2>My Lists</h2><button class="primary" id="create">+ New List</button></div><div id="lists"></div>
+
+<button type="button"
+        id="openBackup"
+        class="outline full"
+        aria-haspopup="dialog">
+  Backup & Restore
+</button>
+
+<p class="footer">No accounts. No ads.</p></section><section id="detail" class="hide"><button class="back" id="back">← My Lists</button><div class="top"><div><h2 id="listTitle"></h2><p class="muted" id="count"></p></div><button class="outline" id="share">Invite ↗</button></div>
 
 <div id="shoppingBanner" class="card shopping hide"></div><!-- Last Call Responses -->
 
@@ -1354,7 +1390,57 @@ function playDing() {
 
 </section>
 </main>
+<dialog id="backupDialog"
+        aria-labelledby="backupTitle">
 
+  <div class="stack">
+
+    <h2 id="backupTitle">
+      Backup & Restore
+    </h2>
+
+    <strong id="backupSubtitle">
+      Your data. Your control.
+    </strong>
+
+    <p id="backupDescription" class="muted">
+      Keep your personal shopping information safe
+      or transfer it to another device.
+    </p>
+
+    <button type="button"
+            id="backupExport"
+            class="primary">
+      ↓ Export My Data
+    </button>
+
+    <button type="button"
+            id="backupImport"
+            class="outline">
+      ↑ Restore My Data
+    </button>
+
+    <input type="file"
+           id="backupFile"
+           accept=".json,application/json"
+           class="hide">
+
+    <p id="backupPrivacy" class="muted">
+      Your backup contains private list access
+      information. Keep it somewhere safe.
+    </p>
+
+    <p id="backupStatus" role="status"></p>
+
+    <button type="button"
+            id="backupClose"
+            class="outline">
+      Done
+    </button>
+
+  </div>
+
+</dialog>
 <dialog id="tripSummaryDialog"
         aria-labelledby="tripSummaryTitle">
 
@@ -1705,7 +1791,7 @@ function t(key) {
 }
 function applyLanguage() {
   document.documentElement.lang = language;
-
+renderBackupLanguage();
   $('languageSwitch').setAttribute(
     'aria-checked',
     String(language === 'es')
@@ -5474,7 +5560,427 @@ setInterval(() => {
     refresh();
   }
 }, 5000);
-}init();
+}
+
+/* Backup & Restore */
+
+function renderBackupLanguage() {
+  const es = language === 'es';
+
+  $('openBackup').textContent =
+    es ? 'Copia de seguridad y restauración'
+       : 'Backup & Restore';
+
+  $('backupTitle').textContent =
+    $('openBackup').textContent;
+
+  $('backupSubtitle').textContent =
+    es ? 'Tus datos. Tu control.'
+       : 'Your data. Your control.';
+
+  $('backupDescription').textContent =
+    es
+      ? 'Protege tu información de compras o transfiérela a otro dispositivo.'
+      : 'Keep your personal shopping information safe or transfer it to another device.';
+
+  $('backupExport').textContent =
+    es ? '↓ Exportar mis datos'
+       : '↓ Export My Data';
+
+  $('backupImport').textContent =
+    es ? '↑ Restaurar mis datos'
+       : '↑ Restore My Data';
+
+  $('backupPrivacy').textContent =
+    es
+      ? 'Tu copia contiene información privada de acceso a tus listas. Guárdala en un lugar seguro.'
+      : 'Your backup contains private list access information. Keep it somewhere safe.';
+
+  $('backupClose').textContent =
+    es ? 'Listo' : 'Done';
+}
+
+function personalBackupKeys() {
+  return [
+    KEY,
+    LANGUAGE_KEY,
+    SAVED_ITEMS_KEY,
+    BUDGET_KEY,
+    PRICE_MEMORY_KEY,
+    PRICE_MEMORY_ENABLED_KEY,
+    PRICE_WATCH_KEY,
+    PRICE_WATCH_ENABLED_KEY,
+    TRIP_BUDGET_KEY,
+    RECEIPT_KEY
+  ];
+}
+
+function collectPersonalBackup() {
+  const data = {};
+
+  for (const key of personalBackupKeys()) {
+    const value = localStorage.getItem(key);
+
+    if (value !== null) {
+      data[key] = value;
+    }
+  }
+
+  return {
+    app: 'Need Anything?',
+    format: 1,
+    exportedAt: new Date().toISOString(),
+    data
+  };
+}
+
+function exportPersonalBackup() {
+  try {
+    const backup = collectPersonalBackup();
+
+    const blob = new Blob(
+      [JSON.stringify(backup, null, 2)],
+      { type: 'application/json' }
+    );
+
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+
+    link.href = url;
+
+    link.download =
+      'Need-Anything-Backup-' +
+      new Date().toISOString().slice(0, 10) +
+      '.json';
+
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+
+    setTimeout(
+      () => URL.revokeObjectURL(url),
+      1000
+    );
+
+    $('backupStatus').textContent = budgetText(
+      'Backup download requested.',
+      'Descarga de la copia solicitada.'
+    );
+
+  } catch {
+    $('backupStatus').textContent = budgetText(
+      'Could not export your data.',
+      'No se pudieron exportar tus datos.'
+    );
+  }
+}
+
+function validatePersonalBackup(backup) {
+  if (
+    !backup ||
+    backup.app !== 'Need Anything?' ||
+    backup.format !== 1 ||
+    !backup.data ||
+    typeof backup.data !== 'object' ||
+    Array.isArray(backup.data)
+  ) {
+    return false;
+  }
+
+  const entries = Object.entries(backup.data);
+  const allowed = personalBackupKeys();
+
+  if (!entries.length) return false;
+
+  for (const [key, value] of entries) {
+    if (
+      !allowed.includes(key) ||
+      typeof value !== 'string'
+    ) {
+      return false;
+    }
+
+    if (key === LANGUAGE_KEY) {
+      if (!['en', 'es'].includes(value)) {
+        return false;
+      }
+      continue;
+    }
+
+    if (
+      key === PRICE_MEMORY_ENABLED_KEY ||
+      key === PRICE_WATCH_ENABLED_KEY
+    ) {
+      if (!['true', 'false'].includes(value)) {
+        return false;
+      }
+      continue;
+    }
+
+    let parsed;
+
+    try {
+      parsed = JSON.parse(value);
+    } catch {
+      return false;
+    }
+
+    if (key === SAVED_ITEMS_KEY) {
+      if (
+        !Array.isArray(parsed) ||
+        !parsed.every(item =>
+          item &&
+          typeof item.id === 'string' &&
+          typeof item.name === 'string' &&
+          item.name.length <= 100 &&
+          (item.qty == null ||
+            typeof item.qty === 'string')
+        )
+      ) {
+        return false;
+      }
+      continue;
+    }
+
+    if (
+      !parsed ||
+      typeof parsed !== 'object' ||
+      Array.isArray(parsed)
+    ) {
+      return false;
+    }
+    // Validate nested personal data records
+
+    const isRecord = value =>
+      value !== null &&
+      typeof value === 'object' &&
+      !Array.isArray(value);
+
+    const isTimestamp = value =>
+      Number.isFinite(value) &&
+      value >= 0 &&
+      value <= 8640000000000000;
+
+    const isOptionalPrice = value =>
+      value === null || validBudgetPrice(value);
+
+    const isPriceMap = value =>
+      isRecord(value) &&
+      Object.values(value).every(isOptionalPrice);
+
+    const records = Object.values(parsed);
+
+    if (key === BUDGET_KEY) {
+      if (!records.every(record =>
+        isRecord(record) &&
+        typeof record.enabled === 'boolean' &&
+        isOptionalPrice(record.limit) &&
+        isPriceMap(record.prices)
+      )) {
+        return false;
+      }
+    }
+
+    if (key === PRICE_MEMORY_KEY) {
+      if (!records.every(record =>
+        isRecord(record) &&
+        validBudgetPrice(record.cents) &&
+        isTimestamp(record.updatedAt)
+      )) {
+        return false;
+      }
+    }
+
+    if (key === PRICE_WATCH_KEY) {
+      if (
+        records.length > 500 ||
+        !records.every(history =>
+          Array.isArray(history) &&
+          history.length <= 20 &&
+          history.every(record =>
+            isRecord(record) &&
+            validBudgetPrice(record.cents) &&
+            isTimestamp(record.at) &&
+            typeof record.name === 'string' &&
+            typeof record.qty === 'string'
+          )
+        )
+      ) {
+        return false;
+      }
+    }
+
+    if (key === TRIP_BUDGET_KEY) {
+      if (
+        records.length > 300 ||
+        !records.every(record =>
+          isRecord(record) &&
+          isOptionalPrice(record.limit) &&
+          isPriceMap(record.prices) &&
+          isTimestamp(record.savedAt)
+        )
+      ) {
+        return false;
+      }
+    }
+
+    if (key === RECEIPT_KEY) {
+      if (
+        records.length > 300 ||
+        !records.every(record =>
+          isRecord(record) &&
+          validBudgetPrice(record.total) &&
+          isTimestamp(record.savedAt)
+        )
+      ) {
+        return false;
+      }
+    }
+    if (key === KEY) {
+      if (
+        typeof parsed.person !== 'string' ||
+        parsed.person.length > 40 ||
+        !Array.isArray(parsed.links) ||
+        !parsed.links.every(link =>
+          link &&
+          typeof link.id === 'string' &&
+          typeof link.key === 'string' &&
+          typeof link.name === 'string' &&
+          link.id.length > 0 &&
+          link.key.length > 0 &&
+          link.id.length <= 200 &&
+          link.key.length <= 200
+        )
+      ) {
+        return false;
+      }
+    }
+  }
+
+  return true;
+}
+
+async function restorePersonalBackup(file) {
+  if (!file) return;
+
+  if (file.size > 5 * 1024 * 1024) {
+    $('backupStatus').textContent = budgetText(
+      'This backup file is too large.',
+      'Esta copia es demasiado grande.'
+    );
+    return;
+  }
+
+  let backup;
+
+  try {
+    backup = JSON.parse(await file.text());
+
+    if (!validatePersonalBackup(backup)) {
+      throw new Error('Invalid backup');
+    }
+
+  } catch {
+    $('backupStatus').textContent = budgetText(
+      'This is not a valid Need Anything backup.',
+      'Esta no es una copia válida de Need Anything.'
+    );
+    return;
+  }
+
+  if (!confirm(budgetText(
+    'Restore this backup? Included personal data will replace the corresponding data on this device. Shared shopping lists on the server will not be changed.',
+    '¿Restaurar esta copia? Los datos incluidos reemplazarán los datos correspondientes de este dispositivo. Las listas compartidas del servidor no cambiarán.'
+  ))) {
+    return;
+  }
+
+  const previous = new Map();
+
+  try {
+    for (const key of Object.keys(backup.data)) {
+      previous.set(
+        key,
+        localStorage.getItem(key)
+      );
+    }
+
+    for (const [key, value] of
+         Object.entries(backup.data)) {
+      localStorage.setItem(key, value);
+    }
+
+  } catch {
+    let rollbackFailed = false;
+
+    for (const [key, value] of previous) {
+      try {
+        if (value === null) {
+          localStorage.removeItem(key);
+        } else {
+          localStorage.setItem(key, value);
+        }
+      } catch {
+        rollbackFailed = true;
+      }
+    }
+
+    $('backupStatus').textContent =
+      rollbackFailed
+        ? budgetText(
+            'Restore failed. Some local data may have changed.',
+            'La restauración falló. Algunos datos locales pueden haber cambiado.'
+          )
+        : budgetText(
+            'Restore failed. Your previous data was preserved.',
+            'La restauración falló. Se conservaron tus datos anteriores.'
+          );
+
+    return;
+  }
+
+  alert(budgetText(
+    'Data restored. The app will now reload.',
+    'Datos restaurados. La aplicación se recargará.'
+  ));
+
+  location.reload();
+}
+
+$('openBackup').onclick = () => {
+  renderBackupLanguage();
+  $('backupStatus').textContent = '';
+  $('backupDialog').showModal();
+};
+
+$('backupExport').onclick =
+  exportPersonalBackup;
+
+$('backupImport').onclick = () => {
+  $('backupFile').value = '';
+  $('backupFile').click();
+};
+
+$('backupFile').onchange = async () => {
+  const file = $('backupFile').files[0];
+
+  $('backupExport').disabled = true;
+  $('backupImport').disabled = true;
+
+  try {
+    await restorePersonalBackup(file);
+  } finally {
+    $('backupFile').value = '';
+    $('backupExport').disabled = false;
+    $('backupImport').disabled = false;
+  }
+};
+
+$('backupClose').onclick = () => {
+  $('backupDialog').close();
+};
+
+init();
 
 
 
