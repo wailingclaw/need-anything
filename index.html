@@ -950,6 +950,80 @@ button:disabled {
 
 .card {
   box-shadow: 0 2px 8px rgba(41, 56, 66, 0.03);
+}/* Last Call Responses */
+
+#lastCallPanel {
+  background: var(--app-active);
+  border-color: var(--app-active-border);
+}
+
+#lastCallHeading {
+  display: block;
+  font-size: 17px;
+}
+
+#lastCallPrompt {
+  font-size: 14px;
+  line-height: 1.5;
+  margin: 10px 0;
+}
+
+.last-call-buttons {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.last-call-buttons button {
+  width: 100%;
+  font-size: 14px;
+  border: 1px solid transparent;
+}
+
+.last-call-buttons button.selected {
+  border-color: var(--app-accent);
+  background: var(--app-primary);
+}
+
+#lastCallConfirmation {
+  font-size: 12px;
+  color: var(--app-success);
+  margin-bottom: 0;
+}
+
+.last-call-member {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--app-active-border);
+}
+
+.last-call-member:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.last-call-member-info {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.last-call-member-info small {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--app-muted);
+}
+
+.last-call-status-icon {
+  font-size: 20px;
+  flex: none;
+}
+
+.last-call-good {
+  color: var(--app-success);
 }
 </style>
 <script>
@@ -995,7 +1069,51 @@ function playDing() {
 </button>
 </header><div id="toast" class="notice hide" role="status"></div><section id="home"><div class="top"><h2>My Lists</h2><button class="primary" id="create">+ New List</button></div><div id="lists"></div><p class="footer">No accounts. No ads.</p></section><section id="detail" class="hide"><button class="back" id="back">← My Lists</button><div class="top"><div><h2 id="listTitle"></h2><p class="muted" id="count"></p></div><button class="outline" id="share">Invite ↗</button></div>
 
-<div id="shoppingBanner" class="card shopping hide"></div><div class="actions"><button class="primary" id="startShop">🛒 I'm Shopping!</button><button id="lastCall" class="hide">🔔 Last Call!</button><button id="doneShop" class="hide">✓ Done Shopping</button>
+<div id="shoppingBanner" class="card shopping hide"></div><!-- Last Call Responses -->
+
+<div id="lastCallPanel" class="card hide">
+
+  <strong id="lastCallHeading">
+    🔔 Last Call!
+  </strong>
+
+  <div id="lastCallMemberView" class="hide">
+
+    <p id="lastCallPrompt"></p>
+
+    <div class="last-call-buttons">
+
+      <button type="button"
+              id="lastCallGood"
+              class="primary"
+              aria-pressed="false">
+        ✓ I'm good, thank you!
+      </button>
+
+      <button type="button"
+              id="lastCallAdding"
+              aria-pressed="false">
+        + Yes, adding something
+      </button>
+
+    </div>
+
+    <p id="lastCallConfirmation"
+       role="status"></p>
+
+  </div>
+
+  <div id="lastCallShopperView" class="hide">
+
+    <p id="lastCallResponseCount"
+       class="muted"
+       style="font-size:12px"></p>
+
+    <div id="lastCallResponseList"></div>
+
+  </div>
+
+</div><div class="actions"><button class="primary" id="startShop">🛒 I'm Shopping!</button><button id="lastCall" class="hide">🔔 Last Call!</button><button id="doneShop" class="hide">✓ Done Shopping</button>
 <!-- Smart Budget -->
 <button
   type="button"
@@ -2001,7 +2119,7 @@ await memberActivityRequest;
   memberActivityRequest = null;
 }
 }
-
+const lastCallMembers = new Map();
 async function loadMembers() {
   const link = state.links.find(l => l.id === current);
   if (!link || document.hidden) return;
@@ -2020,6 +2138,10 @@ const response = await fetch(
     if (current !== link.id) return;
 
 const members = data.members || [];
+
+lastCallMembers.set(link.id, members);
+
+renderLastCall(getList());
 
 $('membersHeading').textContent = `${t('members')} (${members.length})`;
 
@@ -3437,11 +3559,239 @@ $('detail').addEventListener('click', e => {
 
     render();
   }
-});
+});// Last Call Responses
+
+function renderLastCall(list) {
+  const shop = list?.shopping;
+  const active = !!shop?.lastCall;
+
+  $('lastCallPanel').classList.toggle('hide', !active);
+
+  if (!active) return;
+
+  const isShopper = shop.memberId === memberId;
+  const responses = shop.lastCallResponses || {};
+
+  $('lastCallMemberView').classList.toggle(
+    'hide',
+    isShopper
+  );
+
+  $('lastCallShopperView').classList.toggle(
+    'hide',
+    !isShopper
+  );
+
+  if (!isShopper) {
+
+    $('lastCallHeading').textContent = budgetText(
+      '🔔 Last Call!',
+      '🔔 ¡Última llamada!'
+    );
+
+    $('lastCallPrompt').textContent = budgetText(
+      `${shop.by} is finishing up at the store. Need anything else?`,
+      `${shop.by} está por terminar las compras. ¿Necesitas algo más?`
+    );
+
+    $('lastCallGood').textContent = budgetText(
+      "✓ I'm good, thank you!",
+      '✓ No necesito nada más, ¡gracias!'
+    );
+
+    $('lastCallAdding').textContent = budgetText(
+      '+ Yes, adding something',
+      '+ Sí, voy a añadir algo'
+    );
+
+    const response = responses[memberId]?.response;
+
+    $('lastCallGood').classList.toggle(
+      'selected',
+      response === 'good'
+    );
+
+    $('lastCallAdding').classList.toggle(
+      'selected',
+      response === 'adding'
+    );
+
+    $('lastCallGood').setAttribute(
+      'aria-pressed',
+      String(response === 'good')
+    );
+
+    $('lastCallAdding').setAttribute(
+      'aria-pressed',
+      String(response === 'adding')
+    );
+
+    $('lastCallGood').disabled = busy;
+    $('lastCallAdding').disabled = busy;
+
+    $('lastCallConfirmation').textContent = response
+      ? budgetText(
+          '✓ Response sent. You can change your answer.',
+          '✓ Respuesta enviada. Puedes cambiar tu respuesta.'
+        )
+      : '';
+
+    return;
+  }
+
+  // Shopper's response panel
+
+  $('lastCallHeading').textContent = budgetText(
+    '🔔 Last Call responses',
+    '🔔 Respuestas de última llamada'
+  );
+
+  const membersLoaded = lastCallMembers.has(current);
+
+  const members = (lastCallMembers.get(current) || [])
+    .filter(member => member.id !== shop.memberId);
+
+  const answered = members.filter(member =>
+    responses[member.id]?.response === 'good' ||
+    responses[member.id]?.response === 'adding'
+  ).length;
+
+  $('lastCallResponseCount').textContent = membersLoaded
+    ? budgetText(
+        `${answered} of ${members.length} members responded`,
+        `${answered} de ${members.length} miembros respondieron`
+      )
+    : budgetText(
+        'Loading members...',
+        'Cargando miembros...'
+      );
+
+  const html = members.map(member => {
+
+    const response = responses[member.id];
+    const status = response?.response;
+
+    const icon = status === 'good'
+      ? '✓'
+      : status === 'adding'
+        ? '✎'
+        : '◷';
+
+    const label = status === 'good'
+      ? budgetText(
+          "I'm good, thank you!",
+          'No necesito nada más, ¡gracias!'
+        )
+      : status === 'adding'
+        ? budgetText(
+            'Adding something...',
+            'Añadiendo algo...'
+          )
+        : budgetText(
+            'Waiting for response',
+            'Esperando respuesta'
+          );
+
+    return `
+      <div class="last-call-member">
+
+        <span class="last-call-status-icon ${
+          status === 'good' ? 'last-call-good' : ''
+        }" aria-hidden="true">
+          ${icon}
+        </span>
+
+        <div class="last-call-member-info">
+
+          <strong>${escapeHTML(member.name)}</strong>
+
+          <small>${escapeHTML(label)}</small>
+
+          ${response?.at
+            ? `<small>${escapeHTML(timeAgo(response.at))}</small>`
+            : ''}
+
+        </div>
+
+      </div>
+    `;
+
+  }).join('');
+
+  const container = $('lastCallResponseList');
+
+  const content = html || (
+    membersLoaded
+      ? `<p class="muted">${budgetText(
+          'No other members on this list.',
+          'No hay otros miembros en esta lista.'
+        )}</p>`
+      : ''
+  );
+
+  if (container.innerHTML !== content) {
+    container.innerHTML = content;
+  }
+}
+
+async function respondToLastCall(response) {
+
+  const shop = getList()?.shopping;
+  const listId = current;
+
+  if (
+    busy ||
+    !shop?.lastCall ||
+    shop.memberId === memberId
+  ) return;
+
+  if (shop.lastCallResponses?.[memberId]?.response === response) {
+    if (response === 'adding') {
+      $('itemName').focus();
+    }
+    return;
+  }
+
+  const tripId = shop.id;
+
+  await updateMemberActivity();
+
+  if (
+    current !== listId ||
+    getList()?.shopping?.id !== tripId
+  ) return;
+
+  const success = await act('lastCallResponse', {
+    tripId,
+    response
+  });
+
+  if (!success || current !== listId) return;
+
+  toast(budgetText(
+    '✓ Response sent!',
+    '✓ ¡Respuesta enviada!'
+  ));
+
+  if (
+    response === 'adding' &&
+    getList()?.shopping?.id === tripId
+  ) {
+    $('itemName').focus();
+  }
+}
+
+$('lastCallGood').onclick = () =>
+  respondToLastCall('good');
+
+$('lastCallAdding').onclick = () =>
+  respondToLastCall('adding');
 function render(){
   $('appBrand').classList.toggle('hide', !!current);
 
   rememberActiveList();updatePushPanel();let list=getList();$('home').classList.toggle('hide',!!current);$('detail').classList.toggle('hide',!current);$('lists').innerHTML=state.links.length?state.links.map(l=>{let x=lists[l.id];return `<div class="card listcard" data-open="${escapeHTML(l.id)}" role="button" tabindex="0" style="cursor:pointer"><span><strong>${escapeHTML(x?.name||l.name||'Shared list')}</strong>${hasNewActivity(l.id)?'<span style="display:inline-block;background:var(--app-primary);color:var(--app-text);font-size:10px;font-weight:800;padding:3px 7px;border-radius:20px;margin-left:8px;vertical-align:middle">'+t('newBadge')+'</span>':''}<small>${x?x.items.filter(i=>!i.done).length+' '+t('itemsToGet')+(x.shopping?' · <span class="shopping-status-dot" aria-hidden="true"></span> '+t('shoppingNow'):''):t('connecting')}</small>${x?.updatedAt?`<small>${t('updated')} ${timeAgo(x.updatedAt)}</small>`:''}</span><span class="remove-list" data-close="${escapeHTML(l.id)}" title="${t('removeList')}" role="button" tabindex="0" aria-label="${t('removeList')}">✕</span></div>`}).join(''):`<div class="empty">${t('noLists')}</div>`;
+renderLastCall(current ? list : null);
+
 if (!current) return;
 
 renderBudget(list);
@@ -3557,7 +3907,8 @@ function subscribeList(l) {
       id: l.id,
       key: l.key,
       subscription: s.toJSON(),
-      language: language
+      language: language,
+      memberId: memberId
     });
   });
 
