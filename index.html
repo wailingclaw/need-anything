@@ -1051,6 +1051,61 @@ button:disabled {
 
 #backupDialog button {
   width: 100%;
+}/* Saved Items with Photos */
+
+.saved-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+  border-radius: 14px;
+  min-height: 42px;
+}
+
+.saved-chip-photo {
+  width: 42px;
+  height: 42px;
+  object-fit: cover;
+  border-radius: 9px;
+  flex: none;
+}
+
+.saved-chip-label {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.saved-chip-label small {
+  display: block;
+  margin-top: 3px;
+  color: var(--app-muted);
+  font-size: 11px;
+  font-weight: 400;
+}
+
+#savedItemDialog {
+  max-height: 90dvh;
+  overflow-y: auto;
+}
+
+#savedItemDialog input {
+  width: 100%;
+}
+
+#savedItemDelete,
+#savedItemRemovePhoto {
+  color: var(--app-danger);
+}
+
+#photoSaveItem {
+  color: var(--app-gold);
+  background: var(--app-gold-bg);
+  border: 1px solid var(--app-gold-border);
+}
+
+#savedItemStatus {
+  font-size: 12px;
+  overflow-wrap: anywhere;
 }
 </style>
 <script>
@@ -1389,7 +1444,69 @@ function playDing() {
 </button>
 
 </section>
-</main>
+</main><dialog id="savedItemDialog"
+        aria-labelledby="savedItemTitle">
+
+  <div class="stack">
+
+    <h2 id="savedItemTitle">Edit Saved Item</h2>
+
+    <label for="savedItemName"
+           id="savedItemNameLabel">Item name</label>
+
+    <input id="savedItemName" maxlength="100">
+
+    <label for="savedItemQty"
+           id="savedItemQtyLabel">Quantity</label>
+
+    <input id="savedItemQty" maxlength="20">
+
+    <img id="savedItemPreview"
+         class="photo-preview hide"
+         alt="Product photo">
+
+    <input type="file"
+           id="savedItemFile"
+           accept="image/*"
+           class="hide">
+
+    <button type="button"
+            id="savedItemChoose"
+            class="outline">
+      📷 Add photo
+    </button>
+
+    <button type="button"
+            id="savedItemRemovePhoto"
+            class="outline hide">
+      Remove photo
+    </button>
+
+    <p id="savedItemStatus"
+       class="muted"
+       role="status"></p>
+
+    <button type="button"
+            id="savedItemSave"
+            class="primary">
+      Save changes
+    </button>
+
+    <button type="button"
+            id="savedItemDelete"
+            class="outline">
+      Delete saved item
+    </button>
+
+    <button type="button"
+            id="savedItemCancel"
+            class="outline">
+      Cancel
+    </button>
+
+  </div>
+
+</dialog>
 <dialog id="backupDialog"
         aria-labelledby="backupTitle">
 
@@ -1644,7 +1761,11 @@ function playDing() {
       class="muted"
       role="status"
     ></p>
-
+<button type="button"
+        id="photoSaveItem"
+        class="outline">
+  ★ Save to Saved Items
+</button>
     <button
       type="button"
       id="photoDone"
@@ -1907,8 +2028,44 @@ try {
 } catch {
   savedItems = [];
 }
+function validSavedPhoto(photo) {
+  return (
+    typeof photo === 'string' &&
+    photo.length <= 40_000 &&
+    photo.length % 4 === 0 &&
+    photo.startsWith('/9j/') &&
+    /^[A-Za-z0-9+/]+={0,2}$/.test(photo)
+  );
+}
 
+function savedPhotoStorageOK(items) {
+  let total = 0;
+
+  for (const item of items) {
+    if (item.photo == null) continue;
+
+    if (!validSavedPhoto(item.photo)) {
+      return false;
+    }
+
+    total += item.photo.length;
+
+    if (total > 1_000_000) {
+      return false;
+    }
+  }
+
+  return true;
+}
 function persistSavedItems(nextItems) {
+  if (!savedPhotoStorageOK(nextItems)) {
+    toast(language === 'es'
+      ? 'Límite de fotos guardadas alcanzado.'
+      : 'Saved photo storage limit reached.');
+
+    return false;
+  }
+
   try {
     localStorage.setItem(
       SAVED_ITEMS_KEY,
@@ -1984,8 +2141,8 @@ function renderSavedItems() {
 
   $('savedHint').textContent = savedEditing
     ? (es
-        ? 'Toca un artículo para eliminarlo.'
-        : 'Tap an item to delete it.')
+        ? 'Toca un artículo para editarlo.'
+: 'Tap an item to edit it.')
     : (es
         ? 'Toca un artículo para añadirlo a tu lista.'
         : 'Tap an item to add it to your list.');
@@ -2012,33 +2169,61 @@ function renderSavedItems() {
     button.type = 'button';
     button.className = 'saved-chip';
 
-    if (savedEditing) {
-      button.classList.add('delete-mode');
+    if (validSavedPhoto(item.photo)) {
+      const image = document.createElement('img');
+
+      image.className = 'saved-chip-photo';
+      image.src = 'data:image/jpeg;base64,' + item.photo;
+      image.alt = '';
+      image.loading = 'lazy';
+
+      button.appendChild(image);
     }
 
-    button.textContent = savedEditing
-      ? item.name + ' ✕'
-      : '+ ' + item.name;
+    const label = document.createElement('span');
+
+    label.className = 'saved-chip-label';
+
+    label.textContent =
+      (savedEditing ? '' : '+ ') + item.name;
+
+    if (item.qty) {
+      const quantity = document.createElement('small');
+
+      quantity.textContent = item.qty;
+
+      label.appendChild(quantity);
+    }
+
+    button.appendChild(label);
+
+    if (savedEditing) {
+      const editIcon = document.createElement('span');
+
+      editIcon.textContent = '✎';
+      editIcon.setAttribute('aria-hidden', 'true');
+
+      button.appendChild(editIcon);
+    }
 
     button.onclick = async () => {
       if (savedEditing) {
-        const nextItems = savedItems.filter(
-          i => i.id !== item.id
-        );
-
-        if (persistSavedItems(nextItems)) {
-          renderSavedItems();
-        }
-
+        openSavedItemEditor(item.id);
         return;
       }
 
       if (busy || !getList()) return;
 
-      const success = await act('add', {
+      const extra = {
         name: item.name,
         qty: item.qty || ''
-      });
+      };
+
+      if (validSavedPhoto(item.photo)) {
+        extra.image = item.photo;
+      }
+
+      const success = await act('add', extra);
 
       if (success) {
         closeSavedItems();
@@ -2383,7 +2568,16 @@ function renderPhotoDialog() {
   }
 
   $('photoTitle').textContent = item.name;
-
+  $('photoSaveItem').textContent =
+    findSavedItem(item.name)
+      ? photoText(
+          '★ Update Saved Item',
+          '★ Actualizar artículo guardado'
+        )
+      : photoText(
+          '★ Save to Saved Items',
+          '★ Guardar artículo'
+        );
   $('photoHint').textContent = photoText(
     'Show others exactly what to buy.',
     'Muestra a los demás exactamente qué comprar.'
@@ -2427,7 +2621,11 @@ function renderPhotoDialog() {
   }
 }
 
-async function compressPhoto(file) {
+async function compressPhoto(
+  file,
+  maxDimension = 1200,
+  maxEncodedLength = 260_000
+) {
   if (!file || file.size > 20_000_000) {
     throw new Error('Invalid or oversized image');
   }
@@ -2442,7 +2640,7 @@ async function compressPhoto(file) {
 
     const scale = Math.min(
       1,
-      1200 / Math.max(image.width, image.height)
+      maxDimension / Math.max(image.width, image.height)
     );
 
     const canvas = document.createElement('canvas');
@@ -2475,7 +2673,7 @@ async function compressPhoto(file) {
         .toDataURL('image/jpeg', quality)
         .split(',')[1];
 
-      if (encoded && encoded.length <= 260_000) {
+      if (encoded && encoded.length <= maxEncodedLength) {
         return encoded;
       }
     }
@@ -5734,11 +5932,15 @@ function validatePersonalBackup(backup) {
           typeof item.name === 'string' &&
           item.name.length <= 100 &&
           (item.qty == null ||
-            typeof item.qty === 'string')
-        )
+            typeof item.qty === 'string') &&
+          (item.photo == null ||
+            validSavedPhoto(item.photo))
+        ) ||
+        !savedPhotoStorageOK(parsed)
       ) {
         return false;
       }
+
       continue;
     }
 
@@ -5979,7 +6181,361 @@ $('backupFile').onchange = async () => {
 $('backupClose').onclick = () => {
   $('backupDialog').close();
 };
+// Saved Items photo editor
 
+let savedItemDraft = null;
+let savedItemPhotoBusy = false;
+
+function renderSavedItemEditor() {
+  if (!savedItemDraft) return;
+
+  const es = language === 'es';
+  const hasPhoto = validSavedPhoto(savedItemDraft.photo);
+
+  $('savedItemTitle').textContent =
+    es ? 'Editar artículo guardado' : 'Edit Saved Item';
+
+  $('savedItemNameLabel').textContent =
+    es ? 'Nombre del artículo' : 'Item name';
+
+  $('savedItemQtyLabel').textContent =
+    es ? 'Cantidad' : 'Quantity';
+
+  $('savedItemChoose').textContent = hasPhoto
+    ? (es ? '📷 Cambiar foto' : '📷 Replace photo')
+    : (es ? '📷 Añadir foto' : '📷 Add photo');
+
+  $('savedItemRemovePhoto').textContent =
+    es ? 'Eliminar foto' : 'Remove photo';
+
+  $('savedItemSave').textContent =
+    es ? 'Guardar cambios' : 'Save changes';
+
+  $('savedItemDelete').textContent =
+    es ? 'Eliminar artículo' : 'Delete saved item';
+
+  $('savedItemCancel').textContent =
+    es ? 'Cancelar' : 'Cancel';
+
+  $('savedItemPreview').alt =
+    es ? 'Foto del producto' : 'Product photo';
+
+  $('savedItemPreview').classList.toggle(
+    'hide', !hasPhoto
+  );
+
+  $('savedItemRemovePhoto').classList.toggle(
+    'hide', !hasPhoto
+  );
+
+  if (hasPhoto) {
+    $('savedItemPreview').src =
+      'data:image/jpeg;base64,' + savedItemDraft.photo;
+  } else {
+    $('savedItemPreview').removeAttribute('src');
+  }
+}
+
+function openSavedItemEditor(id) {
+  const item = savedItems.find(i => i.id === id);
+
+  if (!item || savedItemPhotoBusy) return;
+
+  savedItemDraft = {...item};
+
+  $('savedItemName').value = item.name;
+  $('savedItemQty').value = item.qty || '';
+  $('savedItemStatus').textContent = '';
+
+  renderSavedItemEditor();
+
+  $('savedItemDialog').showModal();
+}
+
+function setSavedItemPhotoBusy(value) {
+  savedItemPhotoBusy = value;
+
+  for (const id of [
+    'savedItemChoose',
+    'savedItemRemovePhoto',
+    'savedItemSave',
+    'savedItemDelete',
+    'savedItemCancel'
+  ]) {
+    $(id).disabled = value;
+  }
+}
+
+$('savedItemChoose').onclick = () => {
+  $('savedItemFile').value = '';
+  $('savedItemFile').click();
+};
+
+$('savedItemFile').onchange = async () => {
+  const file = $('savedItemFile').files[0];
+
+  $('savedItemFile').value = '';
+
+  if (!file || !savedItemDraft ||
+      savedItemPhotoBusy) return;
+
+  setSavedItemPhotoBusy(true);
+
+  $('savedItemStatus').textContent = photoText(
+    'Preparing photo…',
+    'Preparando foto…'
+  );
+
+  try {
+    const photo = await compressPhoto(
+      file, 320, 40_000
+    );
+
+    if (!validSavedPhoto(photo)) {
+      throw new Error('Invalid photo');
+    }
+
+    savedItemDraft.photo = photo;
+
+    renderSavedItemEditor();
+
+    $('savedItemStatus').textContent = photoText(
+      'Photo ready. Save your changes.',
+      'Foto lista. Guarda los cambios.'
+    );
+
+  } catch {
+    $('savedItemStatus').textContent = photoText(
+      'Could not prepare this photo.',
+      'No se pudo preparar esta foto.'
+    );
+
+  } finally {
+    setSavedItemPhotoBusy(false);
+  }
+};
+
+$('savedItemRemovePhoto').onclick = () => {
+  if (!savedItemDraft || savedItemPhotoBusy) return;
+
+  savedItemDraft.photo = null;
+
+  renderSavedItemEditor();
+
+  $('savedItemStatus').textContent = photoText(
+    'Save changes to remove the photo.',
+    'Guarda los cambios para eliminar la foto.'
+  );
+};
+
+$('savedItemSave').onclick = () => {
+  if (!savedItemDraft || savedItemPhotoBusy) return;
+
+  const name = $('savedItemName').value.trim();
+  const qty = $('savedItemQty').value.trim();
+
+  if (!name) {
+    $('savedItemStatus').textContent = photoText(
+      'Enter an item name.',
+      'Introduce un nombre.'
+    );
+
+    return;
+  }
+
+  const duplicate = savedItems.some(item =>
+    item.id !== savedItemDraft.id &&
+    item.name.trim().toLowerCase() === name.toLowerCase()
+  );
+
+  if (duplicate) {
+    $('savedItemStatus').textContent = photoText(
+      'This item is already saved.',
+      'Este artículo ya está guardado.'
+    );
+
+    return;
+  }
+
+  const nextItems = savedItems.map(item =>
+    item.id === savedItemDraft.id
+      ? {...savedItemDraft, name, qty}
+      : item
+  );
+
+  if (persistSavedItems(nextItems)) {
+    renderSavedItems();
+
+    $('savedItemDialog').close();
+
+    toast(photoText(
+      '✓ Saved item updated!',
+      '✓ ¡Artículo actualizado!'
+    ));
+
+  } else {
+    $('savedItemStatus').textContent = photoText(
+      'Could not save. Storage may be full.',
+      'No se pudo guardar. El almacenamiento puede estar lleno.'
+    );
+  }
+};
+
+$('savedItemDelete').onclick = () => {
+  if (!savedItemDraft || savedItemPhotoBusy) return;
+
+  if (!confirm(photoText(
+    'Delete this saved item?',
+    '¿Eliminar este artículo guardado?'
+  ))) return;
+
+  const nextItems = savedItems.filter(
+    item => item.id !== savedItemDraft.id
+  );
+
+  if (persistSavedItems(nextItems)) {
+    renderSavedItems();
+    $('savedItemDialog').close();
+
+  } else {
+    $('savedItemStatus').textContent = photoText(
+      'Could not delete saved item.',
+      'No se pudo eliminar el artículo.'
+    );
+  }
+};
+
+$('savedItemCancel').onclick = () => {
+  if (!savedItemPhotoBusy) {
+    $('savedItemDialog').close();
+  }
+};
+
+$('savedItemDialog').addEventListener('cancel', e => {
+  if (savedItemPhotoBusy) e.preventDefault();
+});
+
+$('savedItemDialog').addEventListener('close', () => {
+  savedItemDraft = null;
+
+  $('savedItemPreview').removeAttribute('src');
+  $('savedItemFile').value = '';
+});// Save a shopping item with its independent photo
+
+$('photoSaveItem').onclick = async () => {
+  if (busy || photoBusy || !photoTarget) return;
+
+  const link = state.links.find(
+    l => l.id === photoTarget.listId
+  );
+
+  const item = lists[photoTarget.listId]?.items.find(
+    i => i.id === photoTarget.itemId
+  );
+
+  if (!link || !item) return;
+
+  const product = {...item};
+  const existing = findSavedItem(product.name);
+
+  if (existing && !confirm(photoText(
+    'Update this saved product with the current item details?',
+    '¿Actualizar este artículo con los datos actuales?'
+  ))) return;
+
+  photoBusy = true;
+  busy = true;
+  actionRevision++;
+
+  for (const id of [
+    'photoChoose',
+    'photoRemove',
+    'photoDone',
+    'photoSaveItem'
+  ]) {
+    $(id).disabled = true;
+  }
+
+  $('photoStatus').textContent = photoText(
+    'Saving product…',
+    'Guardando producto…'
+  );
+
+  try {
+    let photo = existing?.photo || null;
+
+    if (product.photo) {
+      const response = await fetch(
+        photoURL(product, link),
+        {
+          cache: 'no-store',
+          referrerPolicy: 'no-referrer'
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error('Could not load photo');
+      }
+
+      const file = await response.blob();
+
+      photo = await compressPhoto(
+        file, 320, 40_000
+      );
+
+      if (!validSavedPhoto(photo)) {
+        throw new Error('Invalid photo');
+      }
+    }
+
+    const savedProduct = {
+      id: existing?.id || crypto.randomUUID(),
+      name: product.name,
+      qty: product.qty || '',
+      photo
+    };
+
+    const nextItems = existing
+      ? savedItems.map(i =>
+          i.id === existing.id ? savedProduct : i
+        )
+      : [...savedItems, savedProduct];
+
+    if (!persistSavedItems(nextItems)) {
+      throw new Error('Could not save product');
+    }
+
+    renderSavedItems();
+    renderPhotoDialog();
+
+    $('photoStatus').textContent = photoText(
+      '★ Product saved!',
+      '★ ¡Producto guardado!'
+    );
+
+  } catch {
+    $('photoStatus').textContent = photoText(
+      'Could not save product. Check storage or connection.',
+      'No se pudo guardar. Revisa el almacenamiento o la conexión.'
+    );
+
+  } finally {
+    photoBusy = false;
+    busy = false;
+    actionRevision++;
+
+    for (const id of [
+      'photoChoose',
+      'photoRemove',
+      'photoDone',
+      'photoSaveItem'
+    ]) {
+      $(id).disabled = false;
+    }
+
+    render();
+  }
+};
 init();
 
 
