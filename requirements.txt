@@ -4,3 +4,4 @@ psycopg[binary]>=3.2,<4
 psycopg_pool
 requests>=2.32,<3
 Pillow>=11,<13
+argon2-cffi>=23.1,<26
