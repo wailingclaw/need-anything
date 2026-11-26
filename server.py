@@ -4,6 +4,16 @@ from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 import json, secrets, time, os, threading, logging
+import hashlib
+import re
+from datetime import datetime, timedelta, timezone
+from http.cookies import SimpleCookie
+from argon2 import PasswordHasher
+from argon2.exceptions import (
+    VerifyMismatchError,
+    VerificationError,
+    InvalidHashError
+)
 import io
 import base64
 import requests
@@ -19,6 +29,116 @@ LOCK = threading.RLock()
 
 
 DB_POOL = None
+# Private identity configuration
+
+IDENTITY_ENABLED = (
+    os.environ.get('IDENTITY_ENABLED', 'false').lower()
+    == 'true'
+)
+
+IDENTITY_COOKIE = '__Host-na_identity'
+
+IDENTITY_SESSION_DAYS = 30
+IDENTITY_MAX_SESSIONS = 10
+# Server resource protection
+
+REQUEST_TIMEOUT_SECONDS = 30
+MAX_CONCURRENT_REQUESTS = 24
+
+REQUEST_SLOTS = threading.BoundedSemaphore(
+    MAX_CONCURRENT_REQUESTS
+)
+IDENTITY_ORIGIN = os.environ.get(
+    'IDENTITY_ORIGIN',
+    'https://need-anything.onrender.com'
+).rstrip('/')
+IDENTITY_USERNAME_PATTERN = re.compile(
+    r'^[a-z0-9_]{3,24}$'
+)
+
+IDENTITY_PASSWORD_HASHER = PasswordHasher(
+    time_cost=3,
+    memory_cost=19456,
+    parallelism=1,
+    hash_len=32,
+    salt_len=16
+)
+
+IDENTITY_HASH_SLOTS = threading.BoundedSemaphore(2)
+# Dummy password hash for login timing protection
+
+IDENTITY_DUMMY_HASH = (
+    IDENTITY_PASSWORD_HASHER.hash(
+        secrets.token_urlsafe(32)
+    )
+    if IDENTITY_ENABLED else None
+)
+IDENTITY_REGISTRATION_ENABLED = (
+    os.environ.get(
+        'IDENTITY_REGISTRATION_ENABLED', 'false'
+    ).lower() == 'true'
+)
+
+IDENTITY_RATE_LOCK = threading.Lock()
+IDENTITY_RATE_BUCKETS = {}
+IDENTITY_RATE_MAX_BUCKETS = 5000
+# Private identity emblem collections
+
+IDENTITY_EMBLEMS = {
+    'initials',
+
+    # Nature and outdoors
+    'mountain', 'trees', 'leaf', 'flower-2',
+    'sprout', 'waves', 'tent', 'compass',
+
+    # Sky and elements
+    'sun', 'moon', 'star', 'cloud',
+    'snowflake', 'flame', 'zap', 'rainbow',
+
+    # Animals
+    'paw-print', 'dog', 'cat', 'bird',
+    'fish', 'rabbit', 'turtle', 'squirrel',
+
+    # Food and culinary
+    'chef-hat', 'cooking-pot', 'utensils',
+    'sandwich', 'coffee', 'pizza', 'cherry',
+    'ice-cream-cone', 'apple', 'cookie',
+    'cupcake', 'croissant',
+
+    # Creativity and entertainment
+    'palette', 'music', 'headphones',
+    'gamepad-2', 'camera', 'book-open',
+    'guitar', 'pencil',
+
+    # Adventure and movement
+    'bike', 'footprints', 'sailboat', 'plane',
+    'rocket', 'trophy', 'dumbbell', 'flag',
+
+    # Meaning and personality
+    'heart', 'peace', 'infinity', 'gem',
+    'anchor', 'key', 'shield', 'sparkles',
+
+    # Fun and quirky
+    'smile', 'ghost', 'bot', 'crown',
+    'glasses', 'umbrella', 'balloon', 'gift'
+}
+
+IDENTITY_EMBLEM_COLORS = {
+    'nature': {
+        'meadow', 'forest', 'ocean', 'glacier',
+        'sand', 'sunset', 'lavender', 'stone'
+    },
+
+    'pastel': {
+        'lime', 'sky', 'peach', 'blush',
+        'lilac', 'mint', 'sunshine', 'periwinkle'
+    },
+
+    'metallic': {
+        'gold', 'platinum', 'rose-gold',
+        'copper', 'titanium', 'emerald'
+    }
+}
 
 
 def init_pool():
@@ -56,11 +176,780 @@ def init():
         db.execute('SELECT 1 FROM public.lists LIMIT 1')
         db.execute('SELECT 1 FROM public.subscriptions LIMIT 1')
         db.execute('SELECT 1 FROM public.list_members LIMIT 1')
-
+        if IDENTITY_ENABLED:
+            db.execute('SELECT 1 FROM public.identities LIMIT 1')
+            db.execute('SELECT 1 FROM public.identity_sessions LIMIT 1')
+            db.execute('SELECT 1 FROM public.identity_recovery LIMIT 1')
+            db.execute('SELECT 1 FROM public.identity_rate_limits LIMIT 1')
 def token():
     return secrets.token_urlsafe(24)
+# Private identity helpers
+
+def normalize_username(value):
+    if not isinstance(value, str):
+        raise ValueError('Invalid username')
+
+    username = value.strip().lower()
+
+    if username.startswith('@'):
+        username = username[1:]
+
+    if not IDENTITY_USERNAME_PATTERN.fullmatch(username):
+        raise ValueError('Invalid username')
+
+    return username
 
 
+def validate_identity_password(password):
+    if not isinstance(password, str):
+        raise ValueError('Invalid password')
+
+    if not 15 <= len(password) <= 128:
+        raise ValueError(
+            'Password must contain 15 to 128 characters'
+        )
+
+    try:
+        encoded = password.encode('utf-8')
+    except UnicodeEncodeError:
+        raise ValueError('Invalid password characters')
+
+    if len(encoded) > 512:
+        raise ValueError('Password too large')
+
+    if '\x00' in password:
+        raise ValueError('Invalid password characters')
+
+    return password
+
+def validate_display_name(value):
+    if not isinstance(value, str):
+        raise ValueError('Invalid display name')
+
+    name = value.strip()
+
+    if not 1 <= len(name) <= 40:
+        raise ValueError('Invalid display name')
+
+    if any(not char.isprintable() for char in name):
+        raise ValueError('Invalid display name')
+
+    return name
+def identity_secret():
+    return secrets.token_urlsafe(32)
+
+
+def identity_secret_hash(value):
+    return hashlib.sha256(
+        value.encode('utf-8')
+    ).hexdigest()
+
+
+class IdentityBusyError(Exception):
+    pass
+
+
+def hash_identity_password(password):
+    if not IDENTITY_HASH_SLOTS.acquire(blocking=False):
+        raise IdentityBusyError()
+
+    try:
+        return IDENTITY_PASSWORD_HASHER.hash(password)
+    finally:
+        IDENTITY_HASH_SLOTS.release()
+
+
+def verify_identity_password(password_hash, password):
+    if not IDENTITY_HASH_SLOTS.acquire(blocking=False):
+        raise IdentityBusyError()
+
+    try:
+        return IDENTITY_PASSWORD_HASHER.verify(
+            password_hash,
+            password
+        )
+    except (
+        VerifyMismatchError,
+        VerificationError,
+        InvalidHashError
+    ):
+        return False
+    finally:
+        IDENTITY_HASH_SLOTS.release()
+def public_identity(row):
+    return {
+        'id': str(row['id']),
+        'username': row['username'],
+        'displayName': row['display_name'],
+        'emblem': row['emblem'],
+        'emblemColor': row['emblem_color'],
+        'emblemCollection': row['emblem_collection']
+    }
+
+# Private identity rate limiting
+
+def identity_rate_allowed(key, limit, window):
+    now = time.monotonic()
+
+    with IDENTITY_RATE_LOCK:
+        expired = [
+            bucket_key
+            for bucket_key, bucket in IDENTITY_RATE_BUCKETS.items()
+            if bucket['expires'] <= now
+        ]
+
+        for bucket_key in expired:
+            del IDENTITY_RATE_BUCKETS[bucket_key]
+
+        bucket = IDENTITY_RATE_BUCKETS.get(key)
+
+        if bucket is None:
+            if len(IDENTITY_RATE_BUCKETS) >= IDENTITY_RATE_MAX_BUCKETS:
+                return False
+
+            bucket = {
+                'count': 0,
+                'expires': now + window
+            }
+
+            IDENTITY_RATE_BUCKETS[key] = bucket
+
+        if bucket['count'] >= limit:
+            return False
+
+        bucket['count'] += 1
+
+        return True
+
+# Persistent identity rate limiting
+
+def persistent_identity_rate_allowed(
+    key, limit, window
+):
+    with connect() as db:
+
+        # Periodically remove expired rate-limit records.
+        if secrets.randbelow(100) == 0:
+            db.execute(
+                '''
+                DELETE FROM public.identity_rate_limits
+                WHERE expires_at <= NOW()
+                '''
+            )
+
+        row = db.execute(
+            '''
+            INSERT INTO public.identity_rate_limits
+                (bucket_key, request_count, expires_at)
+            VALUES (
+                %s,
+                1,
+                NOW() + (%s * INTERVAL '1 second')
+            )
+            ON CONFLICT (bucket_key)
+            DO UPDATE SET
+                request_count = CASE
+                    WHEN identity_rate_limits.expires_at <= NOW()
+                    THEN 1
+                    ELSE identity_rate_limits.request_count + 1
+                END,
+                expires_at = CASE
+                    WHEN identity_rate_limits.expires_at <= NOW()
+                    THEN EXCLUDED.expires_at
+                    ELSE identity_rate_limits.expires_at
+                END
+            WHERE identity_rate_limits.expires_at <= NOW()
+                OR identity_rate_limits.request_count < %s
+            RETURNING request_count
+            ''',
+            (key, window, limit)
+        ).fetchone()
+
+    return row is not None
+# Private identity action limits
+
+def identity_action_allowed(action, username):
+    username = normalize_username(username)
+    account_key = identity_secret_hash(username)
+
+    if action == 'register':
+        return persistent_identity_rate_allowed(
+            'identity:register:global', 10, 3600
+        )
+
+    if action == 'login':
+        return persistent_identity_rate_allowed(
+            'identity:login:' + account_key,
+            10, 300
+        )
+
+    if action == 'recover':
+        return persistent_identity_rate_allowed(
+            'identity:recover:' + account_key,
+            5, 900
+        )
+
+    return False
+# Private identity registration
+
+def register_identity(username, display_name, password):
+    username = normalize_username(username)
+    display_name = validate_display_name(display_name)
+    password = validate_identity_password(password)
+
+    password_hash = hash_identity_password(password)
+
+    recovery_key = identity_secret()
+    recovery_hash = identity_secret_hash(recovery_key)
+
+    with connect() as db:
+        identity = db.execute(
+            '''
+            INSERT INTO public.identities
+                (username, display_name, password_hash)
+            VALUES (%s, %s, %s)
+            ON CONFLICT (username) DO NOTHING
+            RETURNING *
+            ''',
+            (username, display_name, password_hash)
+        ).fetchone()
+
+        if identity is None:
+            return None
+
+        db.execute(
+            '''
+            INSERT INTO public.identity_recovery
+                (identity_id, recovery_hash)
+            VALUES (%s, %s)
+            ''',
+            (identity['id'], recovery_hash)
+        )
+
+        raw_token = create_identity_session(
+            db, identity['id']
+        )
+
+    return {
+        'identity': public_identity(identity),
+        'recoveryKey': recovery_key,
+        'sessionToken': raw_token
+    }
+# Private identity sign-in
+
+def authenticate_identity(username, password):
+    username = normalize_username(username)
+    password = validate_identity_password(password)
+
+    with connect() as db:
+        identity = db.execute(
+            '''
+            SELECT id, password_hash
+            FROM public.identities
+            WHERE username = %s
+            ''',
+            (username,)
+        ).fetchone()
+
+    if identity is None:
+        verify_identity_password(
+            IDENTITY_DUMMY_HASH,
+            password
+        )
+        return None
+
+    original_hash = identity['password_hash']
+
+    if not verify_identity_password(
+        original_hash, password
+    ):
+        return None
+
+    with connect() as db:
+        current = db.execute(
+            '''
+            SELECT *
+            FROM public.identities
+            WHERE id = %s
+            FOR UPDATE
+            ''',
+            (identity['id'],)
+        ).fetchone()
+
+        if current is None:
+            return None
+
+        if not secrets.compare_digest(
+            current['password_hash'],
+            original_hash
+        ):
+            return None
+
+        raw_token = create_identity_session(
+            db, current['id']
+        )
+
+    return {
+        'identity': public_identity(current),
+        'sessionToken': raw_token
+    }
+# Private identity recovery
+
+def recover_identity(username, recovery_key, new_password):
+    username = normalize_username(username)
+    new_password = validate_identity_password(new_password)
+
+    if not isinstance(recovery_key, str):
+        raise ValueError('Invalid recovery key')
+
+    if not re.fullmatch(
+        r'[A-Za-z0-9_-]{43}', recovery_key
+    ):
+        raise ValueError('Invalid recovery key')
+
+    recovery_hash = identity_secret_hash(recovery_key)
+
+    with connect() as db:
+        identity = db.execute(
+            '''
+            SELECT i.id, r.recovery_hash
+            FROM public.identities AS i
+            JOIN public.identity_recovery AS r
+                ON r.identity_id = i.id
+            WHERE i.username = %s
+            ''',
+            (username,)
+        ).fetchone()
+
+    if identity is None:
+        return None
+
+    if not secrets.compare_digest(
+        identity['recovery_hash'],
+        recovery_hash
+    ):
+        return None
+
+    password_hash = hash_identity_password(new_password)
+
+    new_recovery_key = identity_secret()
+    new_recovery_hash = identity_secret_hash(
+        new_recovery_key
+    )
+
+    with connect() as db:
+        current = db.execute(
+            '''
+            SELECT *
+            FROM public.identities
+            WHERE id = %s
+            FOR UPDATE
+            ''',
+            (identity['id'],)
+        ).fetchone()
+
+        if current is None:
+            return None
+
+        recovery = db.execute(
+            '''
+            SELECT recovery_hash
+            FROM public.identity_recovery
+            WHERE identity_id = %s
+            FOR UPDATE
+            ''',
+            (identity['id'],)
+        ).fetchone()
+
+        if recovery is None:
+            return None
+
+        if not secrets.compare_digest(
+            recovery['recovery_hash'],
+            recovery_hash
+        ):
+            return None
+
+        updated = db.execute(
+            '''
+            UPDATE public.identities
+            SET password_hash = %s,
+                updated_at = NOW()
+            WHERE id = %s
+            RETURNING *
+            ''',
+            (password_hash, identity['id'])
+        ).fetchone()
+
+        db.execute(
+            '''
+            UPDATE public.identity_recovery
+            SET recovery_hash = %s,
+                created_at = NOW()
+            WHERE identity_id = %s
+            ''',
+            (new_recovery_hash, identity['id'])
+        )
+
+        db.execute(
+            '''
+            UPDATE public.identity_sessions
+            SET revoked_at = NOW()
+            WHERE identity_id = %s
+                AND revoked_at IS NULL
+            ''',
+            (identity['id'],)
+        )
+
+        raw_token = create_identity_session(
+            db, identity['id']
+        )
+
+    return {
+        'identity': public_identity(updated),
+        'recoveryKey': new_recovery_key,
+        'sessionToken': raw_token
+    }
+
+# Private identity personalization
+
+def update_identity_profile(raw_token, data):
+    display_name = validate_display_name(
+        data.get('displayName')
+    )
+
+    emblem = data.get('emblem')
+    collection = data.get('emblemCollection')
+    color = data.get('emblemColor')
+
+    discoverable = data.get('discoverable')
+    allow_requests = data.get('allowRequests')
+
+    if not isinstance(emblem, str):
+        raise ValueError('Invalid emblem')
+
+    if emblem not in IDENTITY_EMBLEMS:
+        raise ValueError('Invalid emblem')
+
+    if not isinstance(collection, str):
+        raise ValueError('Invalid emblem collection')
+
+    if collection not in IDENTITY_EMBLEM_COLORS:
+        raise ValueError('Invalid emblem collection')
+
+    if not isinstance(color, str):
+        raise ValueError('Invalid emblem color')
+
+    if color not in IDENTITY_EMBLEM_COLORS[collection]:
+        raise ValueError('Invalid emblem color')
+
+    if type(discoverable) is not bool:
+        raise ValueError('Invalid privacy preference')
+
+    if type(allow_requests) is not bool:
+        raise ValueError('Invalid request preference')
+
+    with connect() as db:
+        identity = find_identity_session(
+            db, raw_token
+        )
+
+        if identity is None:
+            return None
+
+        current = db.execute(
+            '''
+            SELECT *
+            FROM public.identities
+            WHERE id = %s
+            FOR UPDATE
+            ''',
+            (identity['id'],)
+        ).fetchone()
+
+        if current is None:
+            return None
+
+        session = find_identity_session(
+            db, raw_token
+        )
+
+        if session is None:
+            return None
+
+        if (
+            collection == 'metallic'
+            and not current['metallic_unlocked']
+        ):
+            raise PermissionError(
+                'Metallic collection is locked'
+            )
+
+        updated = db.execute(
+            '''
+            UPDATE public.identities
+            SET display_name = %s,
+                emblem = %s,
+                emblem_color = %s,
+                emblem_collection = %s,
+                discoverable = %s,
+                allow_requests = %s,
+                updated_at = NOW()
+            WHERE id = %s
+            RETURNING *
+            ''',
+            (
+                display_name,
+                emblem,
+                color,
+                collection,
+                discoverable,
+                allow_requests,
+                identity['id']
+            )
+        ).fetchone()
+
+    return {
+        'identity': public_identity(updated),
+        'metallicUnlocked': updated['metallic_unlocked'],
+        'discoverable': updated['discoverable'],
+        'allowRequests': updated['allow_requests']
+    }
+
+
+# Private identity deletion
+
+def delete_identity(raw_token, password):
+    password = validate_identity_password(password)
+
+    with connect() as db:
+        identity = find_identity_session(
+            db, raw_token
+        )
+
+        if identity is None:
+            return 'unauthorized'
+
+        credentials = db.execute(
+            '''
+            SELECT password_hash
+            FROM public.identities
+            WHERE id = %s
+            ''',
+            (identity['id'],)
+        ).fetchone()
+
+    if credentials is None:
+        return 'unauthorized'
+
+    if not persistent_identity_rate_allowed(
+        'identity:delete:account:'
+        + str(identity['id']),
+        5, 900
+    ):
+        return 'rate_limited'
+
+    original_hash = credentials['password_hash']
+
+    if not verify_identity_password(
+        original_hash, password
+    ):
+        return 'invalid_password'
+
+    with connect() as db:
+        current = db.execute(
+            '''
+            SELECT password_hash
+            FROM public.identities
+            WHERE id = %s
+            FOR UPDATE
+            ''',
+            (identity['id'],)
+        ).fetchone()
+
+        if current is None:
+            return 'unauthorized'
+
+        if not secrets.compare_digest(
+            current['password_hash'],
+            original_hash
+        ):
+            return 'invalid_password'
+
+        session = find_identity_session(
+            db, raw_token
+        )
+
+        if session is None:
+            return 'unauthorized'
+
+        db.execute(
+            '''
+            DELETE FROM public.identities
+            WHERE id = %s
+            ''',
+            (identity['id'],)
+        )
+
+    return 'deleted'
+# Private identity sessions
+
+def create_identity_session(db, identity_id):
+    # Remove expired and revoked sessions.
+    db.execute(
+        '''
+        DELETE FROM public.identity_sessions
+        WHERE identity_id = %s
+            AND (
+                expires_at <= NOW()
+                OR revoked_at IS NOT NULL
+            )
+        ''',
+        (identity_id,)
+    )
+
+    # Make room for the new session.
+    db.execute(
+        '''
+        DELETE FROM public.identity_sessions
+        WHERE id IN (
+            SELECT id
+            FROM public.identity_sessions
+            WHERE identity_id = %s
+            ORDER BY created_at DESC, id DESC
+            OFFSET %s
+        )
+        ''',
+        (
+            identity_id,
+            IDENTITY_MAX_SESSIONS - 1
+        )
+    )
+
+    raw_token = identity_secret()
+    token_hash = identity_secret_hash(raw_token)
+
+    expires_at = (
+        datetime.now(timezone.utc)
+        + timedelta(days=IDENTITY_SESSION_DAYS)
+    )
+
+    db.execute(
+        '''
+        INSERT INTO public.identity_sessions
+            (identity_id, token_hash, expires_at)
+        VALUES (%s, %s, %s)
+        ''',
+        (identity_id, token_hash, expires_at)
+    )
+
+    return raw_token
+
+
+def find_identity_session(db, raw_token):
+    if not isinstance(raw_token, str):
+        return None
+
+    if not re.fullmatch(r'[A-Za-z0-9_-]{43}', raw_token):
+        return None
+
+    token_hash = identity_secret_hash(raw_token)
+
+    return db.execute(
+        '''
+        SELECT
+            i.id,
+            i.username,
+            i.display_name,
+            i.emblem,
+            i.emblem_color,
+            i.emblem_collection,
+            i.metallic_unlocked,
+            i.discoverable,
+            i.allow_requests,
+            s.id AS session_id
+        FROM public.identity_sessions AS s
+        JOIN public.identities AS i
+            ON i.id = s.identity_id
+        WHERE s.token_hash = %s
+            AND s.revoked_at IS NULL
+            AND s.expires_at > NOW()
+        ''',
+        (token_hash,)
+    ).fetchone()
+
+
+def revoke_identity_session(db, raw_token):
+    if not isinstance(raw_token, str):
+        return
+
+    if not re.fullmatch(r'[A-Za-z0-9_-]{43}', raw_token):
+        return
+
+    db.execute(
+        '''
+        UPDATE public.identity_sessions
+        SET revoked_at = NOW()
+        WHERE token_hash = %s
+            AND revoked_at IS NULL
+        ''',
+        (identity_secret_hash(raw_token),)
+    )
+
+
+# Private identity session rotation
+
+def rotate_previous_identity_session(
+    previous_token, new_token
+):
+    if previous_token is None:
+        return
+
+    if secrets.compare_digest(
+        previous_token, new_token
+    ):
+        return
+
+    try:
+        with connect() as db:
+            revoke_identity_session(
+                db, previous_token
+            )
+
+    except Exception:
+        logging.error(
+            'Previous identity session rotation failed'
+        )
+# Private identity cookies
+
+def make_identity_cookie(raw_token):
+    cookie = SimpleCookie()
+
+    cookie[IDENTITY_COOKIE] = raw_token
+
+    cookie[IDENTITY_COOKIE]['path'] = '/'
+    cookie[IDENTITY_COOKIE]['secure'] = True
+    cookie[IDENTITY_COOKIE]['httponly'] = True
+    cookie[IDENTITY_COOKIE]['samesite'] = 'Strict'
+    cookie[IDENTITY_COOKIE]['max-age'] = (
+        IDENTITY_SESSION_DAYS * 86400
+    )
+
+    return cookie.output(header='').strip()
+
+
+def clear_identity_cookie():
+    cookie = SimpleCookie()
+
+    cookie[IDENTITY_COOKIE] = ''
+
+    cookie[IDENTITY_COOKIE]['path'] = '/'
+    cookie[IDENTITY_COOKIE]['secure'] = True
+    cookie[IDENTITY_COOKIE]['httponly'] = True
+    cookie[IDENTITY_COOKIE]['samesite'] = 'Strict'
+    cookie[IDENTITY_COOKIE]['max-age'] = 0
+
+    return cookie.output(header='').strip()
 def send_push(
     list_id,
     initiator_endpoint,
@@ -237,6 +1126,49 @@ def delete_photo(lid, photo_id):
 
     except Exception:
         logging.warning('Photo cleanup failed')
+
+
+# Protected HTTP server
+
+class ProtectedHTTPServer(ThreadingHTTPServer):
+
+    daemon_threads = True
+
+    def process_request(
+        self, request, client_address
+    ):
+        if not REQUEST_SLOTS.acquire(
+            blocking=False
+        ):
+            self.shutdown_request(request)
+            return
+
+        try:
+            request.settimeout(
+                REQUEST_TIMEOUT_SECONDS
+            )
+
+            super().process_request(
+                request, client_address
+            )
+
+        except BaseException:
+            REQUEST_SLOTS.release()
+            self.shutdown_request(request)
+            raise
+
+    def process_request_thread(
+        self, request, client_address
+    ):
+        try:
+            super().process_request_thread(
+                request, client_address
+            )
+
+        finally:
+            REQUEST_SLOTS.release()
+
+
 class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *a, **kw):
         super().__init__(*a, directory=str(ROOT), **kw)
@@ -244,23 +1176,166 @@ class Handler(SimpleHTTPRequestHandler):
     def log_message(self, format, *args):
         pass  # Do not log private invitation tokens.
 
-    def reply(self, status, data):
+    def reply(self, status, data, cookie=None):
         body = json.dumps(data).encode()
+
         self.send_response(status)
-        self.send_header('Content-Type', 'application/json; charset=utf-8')
+
+        self.send_header(
+            'Content-Type',
+            'application/json; charset=utf-8'
+        )
+
         self.send_header('Cache-Control', 'no-store')
-        self.send_header('Content-Length', str(len(body)))
+        self.send_header('X-Content-Type-Options', 'nosniff')
+
+        if cookie is not None:
+            self.send_header('Set-Cookie', cookie)
+
+        self.send_header(
+            'Content-Length',
+            str(len(body))
+        )
+
         self.end_headers()
         self.wfile.write(body)
+    def identity_session_token(self):
+        raw_cookie = self.headers.get('Cookie', '')
 
+        if not raw_cookie or len(raw_cookie) > 8192:
+            return None
+
+        try:
+            cookie = SimpleCookie()
+            cookie.load(raw_cookie)
+
+            session = cookie.get(IDENTITY_COOKIE)
+
+            if session is None:
+                return None
+
+            raw_token = session.value
+
+            if not re.fullmatch(
+                r'[A-Za-z0-9_-]{43}',
+                raw_token
+            ):
+                return None
+
+            return raw_token
+
+        except Exception:
+            return None
+
+
+    def current_identity(self, db):
+        raw_token = self.identity_session_token()
+
+        if raw_token is None:
+            return None
+
+        return find_identity_session(db, raw_token)
+
+    def valid_identity_request(self):
+        origin = self.headers.get('Origin', '')
+
+        if origin != IDENTITY_ORIGIN:
+            return False
+
+        content_type = (
+            self.headers.get('Content-Type', '')
+            .split(';', 1)[0]
+            .strip()
+            .lower()
+        )
+
+        return content_type == 'application/json'
+
+    def read_identity_json(self):
+        if self.headers.get('Transfer-Encoding'):
+            raise ValueError('Invalid request encoding')
+
+        lengths = self.headers.get_all('Content-Length') or []
+
+        if len(lengths) != 1:
+            raise ValueError('Invalid request length')
+
+        length = int(lengths[0])
+
+        if not 1 <= length <= 4096:
+            raise ValueError('Invalid identity request size')
+
+        raw = self.rfile.read(length)
+
+        if len(raw) != length:
+            raise ValueError('Incomplete request')
+
+        data = json.loads(raw.decode('utf-8'))
+
+        if not isinstance(data, dict):
+            raise ValueError('Invalid identity request')
+
+        return data
     def read_json(self):
         n = int(self.headers.get('Content-Length', '0'))
         if n <= 0 or n > 10000:
             raise ValueError('Invalid request size')
         return json.loads(self.rfile.read(n))
-
+    def do_HEAD(self):
+        self.send_response(405)
+        self.send_header('Allow', 'GET, POST')
+        self.send_header('Content-Length', '0')
+        self.end_headers()
     def do_GET(self):
         u = urlparse(self.path)
+
+        if u.path.startswith('/api/identity/'):
+            if not IDENTITY_ENABLED:
+                return self.reply(404, {
+                    'error': 'Not found'
+                })
+
+            if u.path != '/api/identity/me':
+                return self.reply(404, {
+                    'error': 'Unknown identity action'
+                })
+
+            if not identity_rate_allowed(
+                'identity:read:global', 300, 60
+            ):
+                return self.reply(429, {
+                    'error': 'Too many requests'
+                })
+
+            if self.identity_session_token() is None:
+                return self.reply(401, {
+                    'error': 'Not signed in'
+                })
+
+            try:
+                with connect() as db:
+                    identity = self.current_identity(db)
+
+                if identity is None:
+                    return self.reply(
+                        401,
+                        {'error': 'Not signed in'},
+                        cookie=clear_identity_cookie()
+                    )
+
+                return self.reply(200, {
+                    'identity': public_identity(identity),
+                    'metallicUnlocked': identity['metallic_unlocked'],
+                    'discoverable': identity['discoverable'],
+                    'allowRequests': identity['allow_requests']
+                })
+
+            except Exception:
+                logging.error('Identity lookup failed')
+
+                return self.reply(500, {
+                    'error': 'Server error'
+                })
         if u.path == '/api/photo':
             q = parse_qs(u.query)
 
@@ -405,6 +1480,251 @@ class Handler(SimpleHTTPRequestHandler):
     def do_POST(self):
         u = urlparse(self.path)
         try:
+            if u.path.startswith('/api/identity/'):
+                if not IDENTITY_ENABLED:
+                    return self.reply(404, {
+                        'error': 'Not found'
+                    })
+
+                if not self.valid_identity_request():
+                    return self.reply(403, {
+                        'error': 'Invalid request origin or type'
+                    })
+
+                if not identity_rate_allowed(
+                    'identity:global', 120, 60
+                ):
+                    return self.reply(429, {
+                        'error': 'Too many requests. Try again shortly.'
+                    })
+
+                if u.path == '/api/identity/register':
+                    if not IDENTITY_REGISTRATION_ENABLED:
+                        return self.reply(403, {
+                            'error': 'Registration is currently unavailable'
+                        })
+
+                    data = self.read_identity_json()
+
+                    username = normalize_username(
+                        data.get('username')
+                    )
+
+                    if not identity_action_allowed(
+                        'register', username
+                    ):
+                        return self.reply(429, {
+                            'error': 'Please try again later'
+                        })
+
+                    result = register_identity(
+                        username,
+                        data.get('displayName'),
+                        data.get('password')
+                    )
+
+                    if result is None:
+                        return self.reply(409, {
+                            'error': 'Username unavailable'
+                        })
+                    rotate_previous_identity_session(
+                        self.identity_session_token(),
+                        result['sessionToken']
+                    )
+                    return self.reply(
+                        201,
+                        {
+                            'identity': result['identity'],
+                            'recoveryKey': result['recoveryKey']
+                        },
+                        cookie=make_identity_cookie(
+                            result['sessionToken']
+                        )
+                    )
+
+                if u.path == '/api/identity/login':
+                    data = self.read_identity_json()
+
+                    username = normalize_username(
+                        data.get('username')
+                    )
+
+                    if not identity_action_allowed(
+                        'login', username
+                    ):
+                        return self.reply(429, {
+                            'error': 'Please try again later'
+                        })
+
+                    result = authenticate_identity(
+                        username,
+                        data.get('password')
+                    )
+
+                    if result is None:
+                        return self.reply(401, {
+                            'error': 'Invalid username or password'
+                        })
+                    rotate_previous_identity_session(
+                        self.identity_session_token(),
+                        result['sessionToken']
+                    )
+                    return self.reply(
+                        200,
+                        {
+                            'identity': result['identity']
+                        },
+                        cookie=make_identity_cookie(
+                            result['sessionToken']
+                        )
+                    )
+                if u.path == '/api/identity/recover':
+                    data = self.read_identity_json()
+
+                    username = normalize_username(
+                        data.get('username')
+                    )
+
+                    if not identity_action_allowed(
+                        'recover', username
+                    ):
+                        return self.reply(429, {
+                            'error': 'Please try again later'
+                        })
+
+                    result = recover_identity(
+                        username,
+                        data.get('recoveryKey'),
+                        data.get('newPassword')
+                    )
+
+                    if result is None:
+                        return self.reply(401, {
+                            'error': 'Invalid recovery credentials'
+                        })
+                    rotate_previous_identity_session(
+                        self.identity_session_token(),
+                        result['sessionToken']
+                    )
+                    return self.reply(
+                        200,
+                        {
+                            'identity': result['identity'],
+                            'recoveryKey': result['recoveryKey']
+                        },
+                        cookie=make_identity_cookie(
+                            result['sessionToken']
+                        )
+                    )
+
+                if u.path == '/api/identity/profile':
+                    raw_token = self.identity_session_token()
+
+                    if raw_token is None:
+                        return self.reply(401, {
+                            'error': 'Not signed in'
+                        })
+
+                    if not identity_rate_allowed(
+                        'identity:profile:'
+                        + identity_secret_hash(raw_token),
+                        20, 60
+                    ):
+                        return self.reply(429, {
+                            'error': 'Please try again later'
+                        })
+
+                    data = self.read_identity_json()
+
+                    try:
+                        result = update_identity_profile(
+                            raw_token, data
+                        )
+
+                    except PermissionError:
+                        return self.reply(403, {
+                            'error': 'Metallic collection is locked'
+                        })
+
+                    if result is None:
+                        return self.reply(
+                            401,
+                            {'error': 'Not signed in'},
+                            cookie=clear_identity_cookie()
+                        )
+
+                    return self.reply(200, result)
+
+                if u.path == '/api/identity/delete':
+                    raw_token = self.identity_session_token()
+
+                    if raw_token is None:
+                        return self.reply(401, {
+                            'error': 'Not signed in'
+                        })
+
+                    if not identity_rate_allowed(
+                        'identity:delete:'
+                        + identity_secret_hash(raw_token),
+                        5, 900
+                    ):
+                        return self.reply(429, {
+                            'error': 'Please try again later'
+                        })
+
+                    data = self.read_identity_json()
+
+                    if data.get('confirm') is not True:
+                        return self.reply(400, {
+                            'error': 'Deletion confirmation required'
+                        })
+
+                    result = delete_identity(
+                        raw_token,
+                        data.get('password')
+                    )
+
+                    if result == 'unauthorized':
+                        return self.reply(
+                            401,
+                            {'error': 'Not signed in'},
+                            cookie=clear_identity_cookie()
+                        )
+                    if result == 'rate_limited':
+                        return self.reply(429, {
+                            'error': 'Please try again later'
+                        })
+                    if result == 'invalid_password':
+                        return self.reply(403, {
+                            'error': 'Incorrect password'
+                        })
+
+                    return self.reply(
+                        200,
+                        {'ok': True},
+                        cookie=clear_identity_cookie()
+                    )
+                if u.path == '/api/identity/logout':
+                    self.read_identity_json()
+
+                    raw_token = self.identity_session_token()
+
+                    if raw_token is not None:
+                        with connect() as db:
+                            revoke_identity_session(
+                                db, raw_token
+                            )
+
+                    return self.reply(
+                        200,
+                        {'ok': True},
+                        cookie=clear_identity_cookie()
+                    )
+
+                return self.reply(404, {
+                    'error': 'Unknown identity action'
+                })
+
             if u.path == '/api/photo':
                 n = int(
                     self.headers.get('Content-Length', '0')
@@ -1110,7 +2430,10 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.reply(200, {'list': obj, 'version': now})
 
             return self.reply(404, {'error': 'Not found'})
-
+        except IdentityBusyError:
+            return self.reply(503, {
+                'error': 'Server busy. Please try again shortly.'
+            })
         except (ValueError, TypeError, json.JSONDecodeError) as exc:
             logging.warning(
                 'Invalid request on %s: %s',
@@ -1128,4 +2451,4 @@ if __name__ == '__main__':
     init()
     port = int(os.environ.get('PORT', '8000'))
     print(f'Need Anything? running on port {port}', flush=True)
-    ThreadingHTTPServer(('0.0.0.0', port), Handler).serve_forever()
+    ProtectedHTTPServer(('0.0.0.0', port), Handler).serve_forever()
