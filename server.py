@@ -510,7 +510,32 @@ class Handler(SimpleHTTPRequestHandler):
                     'list': obj,
                     'version': now
                 })
-            data = self.read_json()
+            if u.path == '/api/action':
+                n = int(
+                    self.headers.get('Content-Length', '0')
+                )
+
+                if n <= 0 or n > 410_000:
+                    return self.reply(413, {
+                        'error': 'Request too large'
+                    })
+
+                data = json.loads(self.rfile.read(n))
+
+                if not isinstance(data, dict):
+                    return self.reply(400, {
+                        'error': 'Invalid request'
+                    })
+
+                if n > 10000 and not (
+                    data.get('action') == 'add'
+                    and isinstance(data.get('image'), str)
+                ):
+                    return self.reply(413, {
+                        'error': 'Request too large'
+                    })
+            else:
+                data = self.read_json()
             if u.path == '/api/member':
                 lid = str(data.get('id', ''))
                 key = str(data.get('key', ''))
@@ -681,6 +706,7 @@ class Handler(SimpleHTTPRequestHandler):
                 key = str(data.get('key', ''))
                 action = data.get('action')
                 removed_photo = None
+                added_photo = None
                 person = str(data.get('person', 'Someone')).strip()[:40] or 'Someone'
                 member_id = str(data.get('memberId', ''))[:100]
                 with LOCK, connect() as db:
@@ -698,18 +724,51 @@ class Handler(SimpleHTTPRequestHandler):
                     now = time.time()
 
                     if action == 'add':
-                        name = str(data.get('name', '')).strip()[:100]
-                        qty = str(data.get('qty', '')).strip()[:20]
-                        if not name or len(items) >= 300:
-                            return self.reply(400, {'error': 'Item missing or list full'})
+                        name = str(
+                            data.get('name', '')
+                        ).strip()[:100]
 
-                        items.insert(0, {
+                        qty = str(
+                            data.get('qty', '')
+                        ).strip()[:20]
+
+                        if not name or len(items) >= 300:
+                            return self.reply(400, {
+                                'error': 'Item missing or list full'
+                            })
+
+                        encoded = data.get('image')
+
+                        if encoded is not None:
+                            photo_count = sum(
+                                bool(x.get('photo'))
+                                for x in items
+                            )
+
+                            if photo_count >= 50:
+                                return self.reply(400, {
+                                    'error': 'List photo limit reached'
+                                })
+
+                            content = prepare_photo(encoded)
+
+                            added_photo = upload_photo(
+                                lid, content
+                            )
+
+                        new_item = {
                             'id': token(),
                             'name': name,
                             'qty': qty,
                             'done': False,
                             'addedDuring': shop['id'] if shop else None
-                        })
+                        }
+
+                        if added_photo:
+                            new_item['photo'] = added_photo
+
+                        items.insert(0, new_item)
+
                         obj['events'].append({
                             'id': token(),
                             'type': 'add',
@@ -981,10 +1040,21 @@ class Handler(SimpleHTTPRequestHandler):
                             latest_event['memberId'] = member_id
 
                     obj['events'] = obj['events'][-100:]
-                    db.execute(
-                        'UPDATE lists SET data=%s, updated=%s WHERE id=%s',
-                        (json.dumps(obj), now, lid)
-                    )
+
+                    try:
+                        db.execute(
+                            'UPDATE lists SET data=%s, updated=%s WHERE id=%s',
+                            (json.dumps(obj), now, lid)
+                        )
+
+                        if added_photo:
+                            db.commit()
+
+                    except Exception:
+                        if added_photo:
+                            delete_photo(lid, added_photo)
+
+                        raise
                 if removed_photo:
                     delete_photo(lid, removed_photo)
                 if action in ('start', 'lastCall'):
