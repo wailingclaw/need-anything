@@ -1231,6 +1231,105 @@ button:disabled {
   margin-top: 12px;
 }
 
+/* My Emblem — Customization */
+
+#emblemEditor {
+  margin: 16px 0;
+  gap: 16px;
+}
+
+.emblem-preview-area {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  padding: 20px 0;
+}
+
+#emblemLivePreview {
+  width: 100px;
+  height: 100px;
+}
+
+.emblem-symbol-grid,
+.emblem-color-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.emblem-symbol-option,
+.emblem-color-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 8px 2px;
+  background: var(--app-surface);
+  border: 1px solid var(--app-border);
+  border-radius: 12px;
+  font-size: 10px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.emblem-symbol-option svg {
+  width: 26px;
+  height: 26px;
+}
+
+.emblem-symbol-option.selected,
+.emblem-color-option.selected,
+.emblem-collection-tabs button.selected {
+  border-color: var(--app-accent);
+  box-shadow: inset 0 0 0 1px var(--app-accent);
+  background: var(--app-active);
+}
+
+.emblem-collection-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.emblem-collection-tabs button {
+  padding: 10px 4px;
+  font-size: 12px;
+  border: 1px solid var(--app-border);
+}
+
+.emblem-swatch {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: 1px solid rgba(0,0,0,.15);
+  background-size: cover;
+  background-position: center;
+}
+
+.emblem-swatch svg {
+  width: 25px;
+  height: 25px;
+}
+
+.emblem-group-heading {
+  margin: 16px 0 8px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.identity-large-emblem svg {
+  width: 52%;
+  height: 52%;
+}
+
+/* End My Emblem Customization */
+
 </style>
 
 <script>
@@ -6881,6 +6980,75 @@ init();
 
     <div id="identityMemberPanel" class="stack hide">
 
+<!-- My Emblem Customization -->
+
+<button type="button"
+        id="openEmblemEditor"
+        class="outline full">
+  Customize My Emblem
+</button>
+
+<section id="emblemEditor" class="stack hide">
+
+  <h2>My Emblem</h2>
+
+  <div class="emblem-preview-area">
+    <div id="emblemLivePreview"
+         class="identity-large-emblem">
+    </div>
+
+    <strong id="emblemPreviewName"></strong>
+  </div>
+
+  <strong>Choose your symbol</strong>
+
+  <button type="button"
+          id="emblemInitials"
+          class="outline full">
+    Use My Initials
+  </button>
+
+  <div id="emblemSymbolGroups"></div>
+
+  <strong>Choose your finish</strong>
+
+  <div class="emblem-collection-tabs">
+
+    <button type="button"
+            data-emblem-collection="nature">
+      Nature
+    </button>
+
+    <button type="button"
+            data-emblem-collection="pastel">
+      Pastels
+    </button>
+
+    <button type="button"
+            data-emblem-collection="metallic">
+      Metallic
+    </button>
+
+  </div>
+
+  <div id="emblemColorGroups"></div>
+
+  <button type="button"
+          id="saveMyEmblem"
+          class="primary full">
+    Save My Emblem
+  </button>
+
+  <button type="button"
+          id="cancelEmblemEditor"
+          class="outline full">
+    Cancel
+  </button>
+
+</section>
+
+<!-- End My Emblem Customization -->
+
       <div class="identity-profile-summary">
 
         <div id="identityLargeEmblem"
@@ -6984,6 +7152,624 @@ init();
   const signOutButton =
     document.getElementById('identitySignOut');
 
+// My Emblem — Symbol Library
+
+const EMBLEM_GROUPS = {
+  'Nature & Outdoors': [
+    'mountain', 'trees', 'leaf', 'flower-2',
+    'sprout', 'waves', 'tent', 'compass'
+  ],
+
+  'Sky & Elements': [
+    'sun', 'moon', 'star', 'cloud',
+    'snowflake', 'flame', 'zap', 'rainbow'
+  ],
+
+  'Animals': [
+    'paw-print', 'dog', 'cat', 'bird',
+    'fish', 'rabbit', 'turtle', 'squirrel'
+  ],
+
+  'Food & Culinary': [
+    'chef-hat', 'cooking-pot', 'utensils',
+    'sandwich', 'coffee', 'pizza',
+    'cherry', 'ice-cream-cone', 'apple',
+    'cookie', 'cupcake', 'croissant'
+  ],
+
+  'Creativity & Entertainment': [
+    'palette', 'music', 'headphones',
+    'gamepad-2', 'camera', 'book-open',
+    'guitar', 'pencil'
+  ],
+
+  'Adventure & Movement': [
+    'bike', 'footprints', 'sailboat',
+    'plane', 'rocket', 'trophy',
+    'dumbbell', 'flag'
+  ],
+
+  'Meaning & Personality': [
+    'heart', 'peace', 'infinity', 'gem',
+    'anchor', 'key', 'shield', 'sparkles'
+  ],
+
+  'Fun & Quirky': [
+    'smile', 'ghost', 'bot', 'crown',
+    'glasses', 'umbrella', 'balloon', 'gift'
+  ]
+};
+
+// My Emblem — Color Collections
+
+const EMBLEM_COLLECTIONS = {
+  nature: [
+    'sand', 'sunset', 'meadow', 'forest',
+    'ocean', 'glacier', 'lavender', 'stone'
+  ],
+
+  pastel: [
+    'sunshine', 'peach', 'blush', 'lilac',
+    'periwinkle', 'sky', 'mint', 'lime'
+  ],
+
+  metallic: [
+    'gold', 'copper', 'rose-gold',
+    'silver', 'iron',
+    'emerald', 'ruby', 'sapphire',
+    'diamond', 'opal', 'titanium',
+    'aurora', 'nebula'
+  ]
+};
+
+// My Emblem — Metallic Categories
+
+const METALLIC_GROUPS = {
+  'Polished Metals': [
+    'gold', 'copper', 'rose-gold',
+    'silver', 'iron'
+  ],
+
+  'Gemstone Tones': [
+    'emerald', 'ruby', 'sapphire'
+  ],
+
+  'Iridescent Finishes': [
+    'diamond', 'opal', 'titanium',
+    'aurora', 'nebula'
+  ]
+};
+
+// End My Emblem Configuration
+
+// My Emblem — SVG Artwork
+
+const EMBLEM_SVG = {
+  'mountain': '<path d="m3 20 7-14 4 8 3-5 5 11Z"/><path d="m7 12 3 2 2-3"/>',
+
+  'trees': '<path d="m8 3-5 8h3l-4 6h12l-4-6h3Z"/><path d="M8 17v5M16 4l5 8h-3l4 6h-6M18 18v4"/>',
+
+  'leaf': '<path d="M20 3C7 3 3 9 5 16s15 5 15-13Z"/><path d="M3 21 15 9"/>',
+
+  'flower-2': '<circle cx="12" cy="12" r="3"/><path d="M12 9C3 7 8 0 12 6c4-6 9 1 0 3M15 12c2-9 9-4 3 0 6 4-1 9-3 0M12 15c9 2 4 9 0 3-4 6-9-1 0-3M9 12c-2 9-9 4-3 0-6-4 1-9 3 0"/>',
+
+  'sprout': '<path d="M12 22V11M12 14C4 14 2 9 3 4c7 0 9 4 9 10ZM12 11c0-6 4-9 9-9 0 7-3 10-9 10"/>',
+
+  'waves': '<path d="M2 6c4-4 6 4 10 0s6 4 10 0M2 12c4-4 6 4 10 0s6 4 10 0M2 18c4-4 6 4 10 0s6 4 10 0"/>',
+
+  'tent': '<path d="m12 3 10 18H2ZM12 3v18M8 21l4-8 4 8"/>',
+
+  'compass': '<circle cx="12" cy="12" r="9"/><path d="m16 8-3 5-5 3 3-5Z"/>',
+
+  'sun': '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/>',
+
+  'moon': '<path d="M20 15A9 9 0 0 1 9 4a9 9 0 1 0 11 11Z"/>',
+
+  'star': '<path d="m12 2 3 6 7 1-5 5 1 8-6-4-6 4 1-8-5-5 7-1Z"/>',
+
+  'cloud': '<path d="M6 19h13a4 4 0 0 0 0-8h-1A7 7 0 0 0 5 9a5 5 0 0 0 1 10Z"/>',
+
+  'snowflake': '<path d="M12 2v20M3 7l18 10M3 17 21 7M9 4l3 3 3-3M9 20l3-3 3 3M3 10l4-1-1-4M18 19l-1-4 4-1M3 14l4 1-1 4M18 5l-1 4 4 1"/>',
+
+  'flame': '<path d="M12 2c2 6 8 8 8 13a8 8 0 0 1-16 0c0-4 3-7 5-9 0 4 2 5 3 5 2-3 1-6 0-9Z"/>',
+
+  'zap': '<path d="m13 2-10 12h8l-1 8 11-13h-9Z"/>',
+
+  'rainbow': '<path d="M2 18a10 10 0 0 1 20 0M5 18a7 7 0 0 1 14 0M8 18a4 4 0 0 1 8 0"/>',
+
+  'chef-hat': '<path d="M6 14a5 5 0 1 1 2-9 5 5 0 0 1 8 0 5 5 0 1 1 2 9v7H6Z"/><path d="M6 17h12"/>'
+};
+
+function createEmblemSymbol(symbol, displayName) {
+  const wrapper = document.createElement('span');
+
+  if (symbol === 'initials') {
+    wrapper.textContent = String(displayName || '?')
+      .trim()
+      .split(/\s+/)
+      .slice(0, 2)
+      .map(word => Array.from(word)[0] || '')
+      .join('')
+      .toUpperCase();
+
+    return wrapper;
+  }
+
+  const artwork = EMBLEM_SVG[symbol];
+
+  if (!artwork) {
+    wrapper.textContent = '?';
+    return wrapper;
+  }
+
+  wrapper.innerHTML =
+    '<svg viewBox="0 0 24 24" ' +
+    'fill="none" stroke="currentColor" ' +
+    'stroke-width="1.7" ' +
+    'stroke-linecap="round" ' +
+    'stroke-linejoin="round" ' +
+    'aria-hidden="true">' +
+    artwork +
+    '</svg>';
+
+  return wrapper.firstElementChild;
+}
+
+// Additional Emblem Symbols
+
+Object.assign(EMBLEM_SVG, {
+
+  // Animals
+
+  'paw-print': '<ellipse cx="12" cy="16" rx="5" ry="4"/><ellipse cx="5" cy="9" rx="2" ry="3"/><ellipse cx="10" cy="5" rx="2" ry="3"/><ellipse cx="15" cy="5" rx="2" ry="3"/><ellipse cx="20" cy="9" rx="2" ry="3"/>',
+
+  'dog': '<path d="M6 5 2 9l2 7 4-3M18 5l4 4-2 7-4-3M6 5q6-4 12 0v10q0 6-6 6t-6-6Z"/><circle cx="9" cy="10" r=".7"/><circle cx="15" cy="10" r=".7"/><path d="m10 15 2 2 2-2Z"/>',
+
+  'cat': '<path d="M4 12V3l6 5h4l6-5v9a8 8 0 0 1-16 0Z"/><path d="M8 12h.1M16 12h.1M10 15l2 2 2-2M2 15h5M17 15h5"/>',
+
+  'bird': '<path d="M3 19h8a8 8 0 0 0 8-8V8l3-2-4-1a4 4 0 0 0-7 3v3L3 19Z"/><path d="M8 15q5 1 7-4M11 19v3M15 18v4"/><circle cx="16" cy="7" r=".5"/>',
+
+  'fish': '<path d="M2 12q9-13 17 0Q11 25 2 12ZM19 12l3-5v10Z"/><circle cx="7" cy="11" r=".8"/>',
+
+  'rabbit': '<ellipse cx="12" cy="15" rx="7" ry="6"/><ellipse cx="8" cy="5" rx="2" ry="5"/><ellipse cx="16" cy="5" rx="2" ry="5"/><path d="M9 14h.1M15 14h.1M11 17l1 1 1-1"/>',
+
+  'turtle': '<ellipse cx="11" cy="12" rx="8" ry="6"/><circle cx="21" cy="12" r="2"/><path d="m5 7-2-3M5 17l-2 3M15 7l2-3M15 17l2 3M3 12H1M11 6v12M4 12h14"/>',
+
+  'squirrel': '<path d="M8 20q-5-3-2-9l3-3 1-5 4 5q4 1 3 5v7H8ZM17 17q7-1 5-9t-7-4q-3 3 1 6"/><circle cx="12" cy="10" r=".7"/>',
+
+  // Food & Culinary
+
+  'cooking-pot': '<path d="M4 9h16v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2ZM2 9h20M1 13h3M20 13h3M7 6h10M10 6V3h4v3"/>',
+
+  'utensils': '<path d="M3 2v6q3 5 6 0V2M6 2v20M18 2q-5 5-5 11h5M18 2v20"/>',
+
+  'sandwich': '<path d="M2 10 12 3l10 7ZM2 14h20l-3 4H5ZM3 10v4M21 10v4M5 18v3h14v-3"/>',
+
+  'coffee': '<path d="M3 8h15v8a5 5 0 0 1-5 5H8a5 5 0 0 1-5-5ZM18 9h2a3 3 0 0 1 0 6h-2M6 2v3M11 2v3M16 2v3"/>',
+
+  'pizza': '<path d="M3 4q9-5 18 0l-9 18ZM5 8q7-4 14 0"/><circle cx="10" cy="11" r="1"/><circle cx="14" cy="15" r="1"/>',
+
+  'cherry': '<circle cx="7" cy="17" r="5"/><circle cx="18" cy="17" r="5"/><path d="M7 12q6-4 6-10 0 7 5 10M13 2q6-2 8 3-5 2-8-3"/>',
+
+  'ice-cream-cone': '<path d="m5 11 7 11 7-11M5 11a4 4 0 0 1 2-7 5 5 0 0 1 10 0 4 4 0 0 1 2 7ZM5 11h14"/>',
+
+  'apple': '<path d="M12 7C3 1 0 12 5 19q3 5 7 2 4 3 7-2C24 12 21 1 12 7ZM12 7V2M12 5q3-5 7-3-1 4-7 3"/>',
+
+  'cookie': '<path d="M20 10a5 5 0 0 1-6-7 10 10 0 1 0 7 7Z"/><circle cx="7" cy="9" r="1"/><circle cx="9" cy="16" r="1"/><circle cx="16" cy="17" r="1"/>',
+
+  'cupcake': '<path d="m4 13 3 9h10l3-9ZM4 13a4 4 0 0 1 2-7 6 6 0 0 1 12 0 4 4 0 0 1 2 7ZM10 15l1 5M14 15l-1 5"/>',
+
+  'croissant': '<path d="M2 16Q2 3 12 3t10 13l-6-4-4 4-4-4ZM6 5l2 7M18 5l-2 7M12 3v13"/>',
+
+  // Creativity & Entertainment
+
+  'palette': '<path d="M12 2a10 10 0 1 0 0 20c3 0 3-3 1-4s-1-4 2-4h4c6 0 3-12-7-12Z"/><circle cx="6" cy="10" r="1"/><circle cx="10" cy="6" r="1"/><circle cx="15" cy="6" r="1"/><circle cx="19" cy="10" r="1"/>',
+
+  'music': '<path d="M9 18V5l12-3v13M9 9l12-3"/><ellipse cx="6" cy="18" rx="3" ry="2"/><ellipse cx="18" cy="15" rx="3" ry="2"/>',
+
+  'headphones': '<path d="M3 15V11a9 9 0 0 1 18 0v4"/><rect x="3" y="12" width="5" height="9" rx="2"/><rect x="16" y="12" width="5" height="9" rx="2"/>',
+
+  'gamepad-2': '<path d="M7 6h10q4 0 5 8t-5 3l-2-3H9l-2 3q-6 5-5-3t5-8Z"/><path d="M7 8v5M4.5 10.5h5"/><circle cx="17" cy="9" r=".7"/><circle cx="19" cy="12" r=".7"/>',
+
+  'camera': '<rect x="2" y="6" width="20" height="15" rx="3"/><path d="m7 6 2-4h6l2 4"/><circle cx="12" cy="13" r="4"/>',
+
+  'book-open': '<path d="M12 5Q7 1 2 4v16q5-3 10 1 5-4 10-1V4q-5-3-10 1ZM12 5v16"/>',
+
+  'guitar': '<path d="m13 9 7-7 2 2-7 7q4 6-2 10-5 3-9-1t-1-9q4-6 10-2Z"/><circle cx="9" cy="15" r="3"/><path d="m6 18 3 3"/>',
+
+  'pencil': '<path d="m3 16 14-14 5 5L8 21l-6 1ZM14 5l5 5M3 16l5 5"/>',
+
+  // Adventure & Movement
+
+  'bike': '<circle cx="5" cy="17" r="4"/><circle cx="19" cy="17" r="4"/><path d="m5 17 5-9 5 9H5M15 17l4-9-2-5h-4M8 8h5"/>',
+
+  'footprints': '<ellipse cx="7" cy="15" rx="3" ry="5" transform="rotate(-15 7 15)"/><ellipse cx="17" cy="8" rx="3" ry="5" transform="rotate(15 17 8)"/><path d="M5 7h.1M8 6h.1M11 8h.1M15 1h.1M18 1h.1M21 3h.1"/>',
+
+  'sailboat': '<path d="M12 2v14H3ZM14 5l7 11h-7ZM2 18h20l-4 4H6Z"/>',
+
+  'plane': '<path d="m12 2 2 8 8 5v3l-8-3v5l3 2H7l3-2v-5l-8 3v-3l8-5Z"/>',
+
+  'rocket': '<path d="M9 15Q5 5 21 2q-3 16-13 12ZM9 15l-5 1 1-6 4-2M15 15l-1 5-6 1 1-5M6 18l-4 4"/><circle cx="15" cy="8" r="2"/>',
+
+  'trophy': '<path d="M7 3h10v8a5 5 0 0 1-10 0ZM7 5H2v3q0 5 5 5M17 5h5v3q0 5-5 5M12 16v5M7 22h10"/>',
+
+  'dumbbell': '<path d="M7 12h10"/><rect x="2" y="7" width="5" height="10" rx="1"/><rect x="17" y="7" width="5" height="10" rx="1"/><path d="M1 10v4M23 10v4"/>',
+
+  'flag': '<path d="M4 22V3q5-4 9 0t8 0v11q-4 4-8 0t-9 0"/>',
+
+  // Meaning & Personality
+
+  'heart': '<path d="M12 21 3 12C-3 4 7-2 12 6 17-2 27 4 21 12Z"/>',
+
+  'peace': '<circle cx="12" cy="12" r="10"/><path d="M12 2v20M12 12l-7 7M12 12l7 7"/>',
+
+  'infinity': '<path d="M12 12C8 4 2 5 2 12s6 8 10 0 10-8 10 0-6 8-10 0Z"/>',
+
+  'gem': '<path d="m2 8 5-5h10l5 5-10 14ZM2 8h20M7 3l2 5 3 14 3-14 2-5"/>',
+
+  'anchor': '<circle cx="12" cy="4" r="2"/><path d="M12 6v16M7 10h10M2 14q0 8 10 8t10-8M2 14l4 3M22 14l-4 3"/>',
+
+  'key': '<circle cx="7" cy="8" r="5"/><path d="m11 12 10 10M16 17l3-3M19 20l3-3"/>',
+
+  'shield': '<path d="m12 2 9 4v7q0 6-9 9-9-3-9-9V6Z"/><path d="m8 12 3 3 5-6"/>',
+
+  'sparkles': '<path d="m12 2 2 7 7 3-7 2-2 8-2-8-8-2 8-3ZM20 2v6M17 5h6M4 17v6M1 20h6"/>',
+
+  // Fun & Quirky
+
+  'smile': '<circle cx="12" cy="12" r="10"/><path d="M8 9h.1M16 9h.1M7 14q5 7 10 0"/>',
+
+  'ghost': '<path d="M3 22V11a9 9 0 0 1 18 0v11l-4-4-5 4-5-4Z"/><circle cx="9" cy="10" r="1"/><circle cx="15" cy="10" r="1"/>',
+
+  'bot': '<rect x="3" y="7" width="18" height="14" rx="3"/><path d="M12 7V2M9 2h6M1 12v4M23 12v4M8 17h8"/><circle cx="8" cy="12" r="1"/><circle cx="16" cy="12" r="1"/>',
+
+  'crown': '<path d="m2 6 5 5 5-8 5 8 5-5-3 14H5ZM5 17h14"/>',
+
+  'glasses': '<circle cx="6" cy="14" r="5"/><circle cx="18" cy="14" r="5"/><path d="M11 14q1-3 2 0M1 13l2-7M23 13l-2-7"/>',
+
+  'umbrella': '<path d="M2 12a10 10 0 0 1 20 0ZM12 2v17a3 3 0 0 0 6 0"/>',
+
+  'balloon': '<ellipse cx="12" cy="9" rx="7" ry="8"/><path d="m12 17-2 3h4ZM12 20q4 2 0 4"/>',
+
+  'gift': '<rect x="3" y="10" width="18" height="12" rx="1"/><rect x="2" y="6" width="20" height="4" rx="1"/><path d="M12 6v16M12 6C2 6 5-3 10 2ZM12 6c10 0 7-9 2-4Z"/>'
+
+});
+
+// End Additional Emblem Symbols
+
+// End My Emblem SVG Artwork
+
+// My Emblem — Interactive Selection
+
+let emblemDraft = null;
+
+function emblemLabel(value) {
+  return value
+    .replace(/-2$/, '')
+    .replace(/-/g, ' ')
+    .replace(/\b\w/g, letter => letter.toUpperCase());
+}
+
+function renderEmblemPreview() {
+  if (!emblemDraft || !activeIdentity) return;
+
+  const preview = document.getElementById('emblemLivePreview');
+  const name = activeIdentity.displayName || activeIdentity.username;
+
+
+paintEmblem(preview, emblemDraft, name);
+
+renderEmblemColors();
+
+
+  document.getElementById('emblemPreviewName').textContent = name;
+}
+
+function renderEmblemSymbols() {
+  const container = document.getElementById('emblemSymbolGroups');
+
+  container.replaceChildren();
+
+  const initialsButton = document.getElementById('emblemInitials');
+
+  initialsButton.classList.toggle(
+    'selected',
+    emblemDraft.emblem === 'initials'
+  );
+
+  initialsButton.setAttribute(
+    'aria-pressed',
+    String(emblemDraft.emblem === 'initials')
+  );
+
+  Object.entries(EMBLEM_GROUPS).forEach(([group, symbols]) => {
+    const heading = document.createElement('h3');
+
+    heading.className = 'emblem-group-heading';
+    heading.textContent = group;
+
+    const grid = document.createElement('div');
+
+    grid.className = 'emblem-symbol-grid';
+
+    symbols.forEach(symbol => {
+      const button = document.createElement('button');
+
+      button.type = 'button';
+      button.className = 'emblem-symbol-option';
+
+      button.classList.toggle(
+        'selected',
+        emblemDraft.emblem === symbol
+      );
+
+      button.setAttribute(
+        'aria-pressed',
+        String(emblemDraft.emblem === symbol)
+      );
+
+      const label = document.createElement('span');
+
+      label.textContent = emblemLabel(symbol);
+
+      button.append(
+        createEmblemSymbol(symbol, activeIdentity.displayName),
+        label
+      );
+
+      button.addEventListener('click', () => {
+        emblemDraft.emblem = symbol;
+
+        renderEmblemSymbols();
+        renderEmblemPreview();
+      });
+
+      grid.appendChild(button);
+    });
+
+    container.append(heading, grid);
+  });
+}
+
+document.getElementById('openEmblemEditor')
+  .addEventListener('click', () => {
+    if (!activeIdentity || identityBusy) return;
+
+    emblemDraft = {
+      emblem: activeIdentity.emblem || 'initials',
+      emblemCollection: activeIdentity.emblemCollection || 'nature',
+      emblemColor: activeIdentity.emblemColor || 'sand'
+    };
+
+    if (emblemDraft.emblemColor === 'platinum') {
+      emblemDraft.emblemColor = 'silver';
+    }
+
+    document.getElementById('emblemEditor')
+      .classList.remove('hide');
+
+    document.getElementById('openEmblemEditor')
+      .classList.add('hide');
+
+    renderEmblemSymbols();
+    renderEmblemPreview();
+  });
+
+document.getElementById('emblemInitials')
+  .addEventListener('click', () => {
+    if (!emblemDraft) return;
+
+    emblemDraft.emblem = 'initials';
+
+    renderEmblemSymbols();
+    renderEmblemPreview();
+  });
+
+function closeEmblemEditor() {
+  emblemDraft = null;
+
+  document.getElementById('emblemEditor')
+    .classList.add('hide');
+
+  document.getElementById('openEmblemEditor')
+    .classList.remove('hide');
+}
+
+document.getElementById('cancelEmblemEditor')
+  .addEventListener('click', closeEmblemEditor);
+
+profileDialog.addEventListener('close', closeEmblemEditor);
+
+signOutButton.addEventListener('click', closeEmblemEditor);
+
+// End My Emblem Interactive Selection
+
+// My Emblem — Finish Selection
+
+const EMBLEM_COLORS = {
+  sand: '#C9AD86',
+  sunset: '#D19A81',
+  meadow: '#91AA8E',
+  forest: '#3E695A',
+  ocean: '#538DA0',
+  glacier: '#A5CAD8',
+  lavender: '#B3A0C1',
+  stone: '#9C9996',
+
+  sunshine: '#F8DC91',
+  peach: '#F9BEA1',
+  blush: '#EFA8BA',
+  lilac: '#C9AFDF',
+  periwinkle: '#A5B3DD',
+  sky: '#A4D9E9',
+  mint: '#9FD8C7',
+  lime: '#C6DF9A'
+};
+
+function paintEmblem(element, draft, name) {
+  element.replaceChildren(
+    createEmblemSymbol(draft.emblem, name)
+  );
+
+  element.style.backgroundColor =
+    EMBLEM_COLORS[draft.emblemColor] || '#293842';
+
+  element.style.backgroundImage = '';
+  element.style.color = '#FFFFFF';
+  element.style.backgroundSize = 'cover';
+  element.style.backgroundPosition = 'center';
+
+  element.dataset.finish = draft.emblemColor;
+  element.dataset.collection = draft.emblemCollection;
+}
+
+function renderEmblemColors() {
+  if (!emblemDraft || !activeIdentity) return;
+
+  const container =
+    document.getElementById('emblemColorGroups');
+
+  container.replaceChildren();
+
+  const collection = emblemDraft.emblemCollection;
+  const name = activeIdentity.displayName;
+
+  document.querySelectorAll('[data-emblem-collection]')
+    .forEach(button => {
+      const selected =
+        button.dataset.emblemCollection === collection;
+
+      button.classList.toggle('selected', selected);
+      button.setAttribute('aria-pressed', String(selected));
+    });
+
+  const groups = collection === 'metallic'
+    ? METALLIC_GROUPS
+    : { '': EMBLEM_COLLECTIONS[collection] };
+
+  Object.entries(groups).forEach(([heading, colors]) => {
+    if (heading) {
+      const title = document.createElement('h3');
+      title.className = 'emblem-group-heading';
+      title.textContent = heading;
+      container.appendChild(title);
+    }
+
+    const grid = document.createElement('div');
+    grid.className = 'emblem-color-grid';
+
+    colors.forEach(color => {
+      const button = document.createElement('button');
+
+      button.type = 'button';
+      button.className = 'emblem-color-option';
+
+      const selected = emblemDraft.emblemColor === color;
+
+      button.classList.toggle('selected', selected);
+      button.setAttribute('aria-pressed', String(selected));
+
+      const swatch = document.createElement('span');
+      swatch.className = 'emblem-swatch';
+
+      paintEmblem(
+        swatch,
+        { ...emblemDraft, emblemColor: color },
+        name
+      );
+
+      const label = document.createElement('span');
+      label.textContent = emblemLabel(color);
+
+      button.append(swatch, label);
+
+      button.addEventListener('click', () => {
+        if (identityBusy || !emblemDraft) return;
+
+        emblemDraft.emblemColor = color;
+        renderEmblemPreview();
+      });
+
+      grid.appendChild(button);
+    });
+
+    container.appendChild(grid);
+  });
+}
+
+document.querySelectorAll('[data-emblem-collection]')
+  .forEach(button => {
+    button.addEventListener('click', () => {
+      if (!emblemDraft || identityBusy) return;
+
+      const collection = button.dataset.emblemCollection;
+
+      if (collection === emblemDraft.emblemCollection) return;
+
+      emblemDraft.emblemCollection = collection;
+      emblemDraft.emblemColor =
+        EMBLEM_COLLECTIONS[collection][0];
+
+      renderEmblemPreview();
+    });
+  });
+
+// End My Emblem Finish Selection
+
+// My Emblem — Save to Account
+
+document.getElementById('saveMyEmblem')
+  .addEventListener('click', async () => {
+    if (!activeIdentity || !emblemDraft || identityBusy) return;
+
+    identityBusy = true;
+
+    const saveButton = document.getElementById('saveMyEmblem');
+    const selectedEmblem = { ...emblemDraft };
+    const accountId = activeIdentity.id;
+
+    saveButton.disabled = true;
+    status.textContent = 'Saving your emblem...';
+
+    try {
+      const current = await identityRequest('me');
+
+      if (current.identity.id !== accountId) {
+        throw new Error('Your session has changed.');
+      }
+
+      if (
+        typeof current.discoverable !== 'boolean' ||
+        typeof current.allowRequests !== 'boolean'
+      ) {
+        throw new Error('Could not verify privacy settings.');
+      }
+
+      const result = await identityRequest('profile', {
+        displayName: current.identity.displayName,
+        emblem: selectedEmblem.emblem,
+        emblemCollection: selectedEmblem.emblemCollection,
+        emblemColor: selectedEmblem.emblemColor,
+        discoverable: current.discoverable,
+        allowRequests: current.allowRequests
+      });
+
+      renderIdentity(result.identity);
+      closeEmblemEditor();
+
+      status.textContent = 'Your emblem has been saved!';
+
+    } catch (error) {
+      status.textContent = error.message;
+
+    } finally {
+      saveButton.disabled = false;
+      identityBusy = false;
+    }
+  });
+
+// End My Emblem Save to Account
+
   let activeIdentity = null;
   let identityBusy = false;
 
@@ -7033,7 +7819,23 @@ init();
     );
 
     if (!activeIdentity) {
-      document.getElementById(
+    
+profileButton.removeAttribute('style');
+delete profileButton.dataset.finish;
+delete profileButton.dataset.collection;
+
+profileButton.innerHTML = `
+  <svg width="24" height="24"
+       viewBox="0 0 24 24"
+       fill="none"
+       stroke="currentColor"
+       stroke-width="1.8"
+       aria-hidden="true">
+    <circle cx="12" cy="8" r="3.5"/>
+    <path d="M5 21v-2a7 7 0 0 1 14 0v2"/>
+  </svg>
+`;
+  document.getElementById(
         'identityDisplayName'
       ).textContent = '';
 
@@ -7067,9 +7869,19 @@ init();
       .join('')
       .toUpperCase();
 
-    document.getElementById(
-      'identityLargeEmblem'
-    ).textContent = initials;
+
+paintEmblem(
+  document.getElementById('identityLargeEmblem'),
+  activeIdentity,
+  name
+);
+
+paintEmblem(
+  profileButton,
+  activeIdentity,
+  name
+);
+
   }
 
   async function loadIdentity() {
