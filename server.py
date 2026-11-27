@@ -670,8 +670,8 @@ def update_identity_profile(raw_token, data):
         if current is None:
             return None
 
-        session = find_identity_session(
-            db, raw_token
+        session = lock_identity_session(
+            db, raw_token, identity['id']
         )
 
         if session is None:
@@ -776,8 +776,8 @@ def delete_identity(raw_token, password):
         ):
             return 'invalid_password'
 
-        session = find_identity_session(
-            db, raw_token
+        session = lock_identity_session(
+            db, raw_token, identity['id']
         )
 
         if session is None:
@@ -878,7 +878,28 @@ def find_identity_session(db, raw_token):
         (token_hash,)
     ).fetchone()
 
+def lock_identity_session(db, raw_token, identity_id):
+    if not isinstance(raw_token, str):
+        return None
 
+    if not re.fullmatch(r'[A-Za-z0-9_-]{43}', raw_token):
+        return None
+
+    return db.execute(
+        '''
+        SELECT id
+        FROM public.identity_sessions
+        WHERE token_hash = %s
+            AND identity_id = %s
+            AND revoked_at IS NULL
+            AND expires_at > clock_timestamp()
+        FOR UPDATE
+        ''',
+        (
+            identity_secret_hash(raw_token),
+            identity_id
+        )
+    ).fetchone()
 def revoke_identity_session(db, raw_token):
     if not isinstance(raw_token, str):
         return
@@ -949,7 +970,11 @@ def clear_identity_cookie():
     cookie[IDENTITY_COOKIE]['samesite'] = 'Strict'
     cookie[IDENTITY_COOKIE]['max-age'] = 0
 
-    return cookie.output(header='').strip()# Trusted browser push service providers
+    return cookie.output(header='').strip()
+
+
+# Trusted browser push service providers
+
 
 TRUSTED_PUSH_HOSTS = {
     'fcm.googleapis.com',
@@ -1043,7 +1068,6 @@ def send_push(
 
             if not isinstance(subscription, dict):
                 continue
-
             if not valid_push_endpoint(subscription.get('endpoint')):
                 logging.warning('Untrusted push endpoint skipped')
                 continue
