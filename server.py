@@ -949,7 +949,67 @@ def clear_identity_cookie():
     cookie[IDENTITY_COOKIE]['samesite'] = 'Strict'
     cookie[IDENTITY_COOKIE]['max-age'] = 0
 
-    return cookie.output(header='').strip()
+    return cookie.output(header='').strip()# Trusted browser push service providers
+
+TRUSTED_PUSH_HOSTS = {
+    'fcm.googleapis.com',
+    'web.push.apple.com',
+    'updates.push.services.mozilla.com'
+}
+
+
+def valid_push_endpoint(endpoint):
+    if not isinstance(endpoint, str):
+        return False
+
+    if not 1 <= len(endpoint) <= 4096:
+        return False
+
+    if any(
+        char.isspace() or ord(char) < 32
+        for char in endpoint
+    ):
+        return False
+
+    if '\\' in endpoint:
+        return False
+
+    try:
+        parsed = urlparse(endpoint)
+        host = parsed.hostname
+
+        if (
+            parsed.scheme != 'https'
+            or not host
+            or parsed.username is not None
+            or parsed.password is not None
+            or parsed.port not in (None, 443)
+            or parsed.fragment
+            or not parsed.path.startswith('/')
+        ):
+            return False
+
+        if host in TRUSTED_PUSH_HOSTS:
+            return True
+
+        if host.endswith('.notify.windows.com'):
+            return True
+
+        return False
+
+    except ValueError:
+        return False
+
+
+class PushRequestSession(requests.Session):
+    def request(self, method, url, **kwargs):
+        if not valid_push_endpoint(url):
+            raise ValueError('Untrusted push endpoint')
+
+        kwargs['allow_redirects'] = False
+        kwargs['timeout'] = (5, 10)
+
+        return super().request(method, url, **kwargs)
 def send_push(
     list_id,
     initiator_endpoint,
@@ -981,6 +1041,17 @@ def send_push(
         try:
             subscription = json.loads(row['subscription'])
 
+            if not isinstance(subscription, dict):
+                continue
+
+            if not valid_push_endpoint(subscription.get('endpoint')):
+                logging.warning('Untrusted push endpoint skipped')
+                continue
+
+            if subscription.get('endpoint') != row['endpoint']:
+                logging.warning('Mismatched push endpoint skipped')
+                continue
+
             recipient_member_id = subscription.pop('memberId', '')
 
             if (
@@ -997,17 +1068,20 @@ def send_push(
                 else message
             )
 
-            webpush(
-                subscription_info=subscription,
-                data=json.dumps({
-                    'title': 'Need Anything?',
-                    'body': body,
-                    'url': url
-                }),
-                vapid_private_key=private,
-                vapid_claims={'sub': 'mailto:' + email},
-                ttl=300
-            )
+            with PushRequestSession() as push_session:
+                webpush(
+                    subscription_info=subscription,
+                    data=json.dumps({
+                        'title': 'Need Anything?',
+                        'body': body,
+                        'url': url
+                    }),
+                    vapid_private_key=private,
+                    vapid_claims={'sub': 'mailto:' + email},
+                    ttl=300,
+                    timeout=10,
+                    requests_session=push_session
+                )
         except WebPushException as exc:
             if getattr(getattr(exc, 'response', None), 'status_code', None) in (404, 410):
                 with connect() as db:
@@ -1922,8 +1996,7 @@ class Handler(SimpleHTTPRequestHandler):
 
                 valid = (
                     isinstance(sub, dict)
-                    and isinstance(sub.get('endpoint'), str)
-                    and sub['endpoint'].startswith('https://')
+                    and valid_push_endpoint(sub.get('endpoint'))
                     and len(json.dumps(sub)) <= 8000
                     and isinstance(sub.get('keys'), dict)
                     and all(
