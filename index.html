@@ -6757,7 +6757,8 @@ init();
 </script>
 <!-- Private Identity — Profile Interface -->
 
-<dialog id="identityProfileDialog">
+<dialog id="identityProfileDialog"
+        aria-labelledby="identityDialogHeading">
   <div class="stack">
 
     <div class="row" style="align-items:center;justify-content:space-between">
@@ -6775,7 +6776,87 @@ init();
         shopping simple.
       </p>
 
-      <form id="identityLoginForm" class="stack">
+     
+
+<!-- Account Registration and Recovery -->
+
+<button type="button" class="outline full"
+        id="identityCreateToggle">
+  Create Account
+</button>
+
+<button type="button" class="outline full"
+        id="identityRecoverToggle">
+  Recover Account
+</button>
+
+<form id="identityCreateForm"
+      class="stack hide" method="post">
+
+  <label for="identityNewName">Display name</label>
+  <input id="identityNewName"
+         maxlength="40" required>
+
+  <label for="identityNewUsername">Username</label>
+  <input id="identityNewUsername"
+         autocomplete="username"
+         pattern="[A-Za-z0-9_]{3,24}"
+         maxlength="24" required>
+
+  <label for="identityNewPassword">
+    Password (15–128 characters)
+  </label>
+  <input id="identityNewPassword"
+         type="password"
+         autocomplete="new-password"
+         minlength="15"
+         maxlength="128" required>
+
+  <button class="primary full" type="submit">
+    Create Account
+  </button>
+
+</form>
+
+<form id="identityRecoverForm"
+      class="stack hide" method="post">
+
+  <label for="identityRecoverUsername">
+    Username
+  </label>
+  <input id="identityRecoverUsername"
+         autocomplete="username"
+         maxlength="24" required>
+
+  <label for="identityRecoverKey">
+    Recovery key
+  </label>
+  <input id="identityRecoverKey"
+         autocomplete="off"
+         type="password"
+         minlength="43"
+         maxlength="43" required>
+
+  <label for="identityRecoverPassword">
+    New password (15–128 characters)
+  </label>
+  <input id="identityRecoverPassword"
+         type="password"
+         autocomplete="new-password"
+         minlength="15"
+         maxlength="128" required>
+
+  <button class="primary full" type="submit">
+    Recover Account
+  </button>
+
+</form>
+
+
+<!-- End Account Registration and Recovery -->
+
+<form id="identityLoginForm" class="stack" method="post">
+
 
         <label for="identityUsername">Username</label>
         <input id="identityUsername"
@@ -6818,6 +6899,30 @@ init();
       </button>
 
     </div>
+
+<!-- Private Recovery Key -->
+
+<section id="identityRecoveryNotice"
+         class="stack hide">
+
+  <strong>Save your recovery key</strong>
+
+  <p>
+    Keep this key somewhere private and safe.
+    It is shown only once. Do not share it.
+  </p>
+
+  <output id="identityRecoveryOutput"
+          style="overflow-wrap:anywhere;user-select:all">
+  </output>
+
+  <button type="button"
+          class="primary full"
+          id="identityRecoveryDone">
+    I have saved my key
+  </button>
+
+</section>
 
     <p id="identityStatus"
        class="muted"
@@ -7057,6 +7162,177 @@ init();
       }
     }
   );
+
+// Account Registration and Recovery
+
+const createForm =
+  document.getElementById('identityCreateForm');
+
+const recoverForm =
+  document.getElementById('identityRecoverForm');
+
+const recoveryNotice =
+  document.getElementById('identityRecoveryNotice');
+
+const recoveryOutput =
+  document.getElementById('identityRecoveryOutput');
+
+document.getElementById('identityCreateToggle')
+  .addEventListener('click', () => {
+    createForm.classList.toggle('hide');
+    recoverForm.classList.add('hide');
+    recoverForm.reset();
+    status.textContent = '';
+  });
+
+document.getElementById('identityRecoverToggle')
+  .addEventListener('click', () => {
+    recoverForm.classList.toggle('hide');
+    createForm.classList.add('hide');
+    createForm.reset();
+    status.textContent = '';
+  });
+
+function showRecoveryKey(key) {
+  recoveryOutput.textContent = key;
+  recoveryNotice.classList.remove('hide');
+  memberPanel.classList.add('hide');
+}
+
+document.getElementById('identityRecoveryDone')
+  .addEventListener('click', () => {
+    recoveryOutput.textContent = '';
+    recoveryNotice.classList.add('hide');
+    renderIdentity(activeIdentity);
+  });
+
+profileDialog.addEventListener('cancel', event => {
+  if (identityBusy ||
+      !recoveryNotice.classList.contains('hide')) {
+    event.preventDefault();
+  }
+});
+
+closeButton.addEventListener('click', event => {
+  if (identityBusy ||
+      !recoveryNotice.classList.contains('hide')) {
+    event.stopImmediatePropagation();
+  }
+}, true);
+
+createForm.addEventListener('submit', async event => {
+  event.preventDefault();
+
+  if (identityBusy) return;
+
+  identityBusy = true;
+
+  const submitButton =
+    createForm.querySelector('button[type="submit"]');
+
+  submitButton.disabled = true;
+  status.textContent = 'Creating your account...';
+
+  try {
+    const result = await identityRequest('register', {
+      displayName: document.getElementById(
+        'identityNewName'
+      ).value.trim(),
+
+      username: document.getElementById(
+        'identityNewUsername'
+      ).value.trim().toLowerCase(),
+
+      password: document.getElementById(
+        'identityNewPassword'
+      ).value
+    });
+
+    renderIdentity(result.identity);
+    createForm.reset();
+    createForm.classList.add('hide');
+    showRecoveryKey(result.recoveryKey);
+    status.textContent = '';
+
+  } catch (error) {
+    status.textContent = error.message;
+
+  } finally {
+    document.getElementById(
+      'identityNewPassword'
+    ).value = '';
+
+    submitButton.disabled = false;
+    identityBusy = false;
+  }
+});
+
+recoverForm.addEventListener('submit', async event => {
+  event.preventDefault();
+
+  if (identityBusy) return;
+
+  identityBusy = true;
+
+  const submitButton =
+    recoverForm.querySelector('button[type="submit"]');
+
+  submitButton.disabled = true;
+  status.textContent = 'Recovering your account...';
+
+  try {
+    const result = await identityRequest('recover', {
+      username: document.getElementById(
+        'identityRecoverUsername'
+      ).value.trim().toLowerCase(),
+
+      recoveryKey: document.getElementById(
+        'identityRecoverKey'
+      ).value.trim(),
+
+      newPassword: document.getElementById(
+        'identityRecoverPassword'
+      ).value
+    });
+
+    renderIdentity(result.identity);
+    recoverForm.reset();
+    recoverForm.classList.add('hide');
+    showRecoveryKey(result.recoveryKey);
+    status.textContent = '';
+
+  } catch (error) {
+    status.textContent = error.message;
+
+  } finally {
+    document.getElementById(
+      'identityRecoverPassword'
+    ).value = '';
+
+    document.getElementById(
+      'identityRecoverKey'
+    ).value = '';
+
+    submitButton.disabled = false;
+    identityBusy = false;
+  }
+});
+
+profileDialog.addEventListener('close', () => {
+  createForm.reset();
+  recoverForm.reset();
+
+  createForm.classList.add('hide');
+  recoverForm.classList.add('hide');
+
+  recoveryOutput.textContent = '';
+  recoveryNotice.classList.add('hide');
+
+  renderIdentity(activeIdentity);
+});
+
+// End Account Registration and Recovery
+
 
   loadIdentity();
 
