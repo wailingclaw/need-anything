@@ -123,22 +123,27 @@ IDENTITY_EMBLEMS = {
     'glasses', 'umbrella', 'balloon', 'gift'
 }
 
+
 IDENTITY_EMBLEM_COLORS = {
     'nature': {
-        'meadow', 'forest', 'ocean', 'glacier',
-        'sand', 'sunset', 'lavender', 'stone'
+        'sand', 'sunset', 'meadow', 'forest',
+        'ocean', 'glacier', 'lavender', 'stone'
     },
 
     'pastel': {
-        'lime', 'sky', 'peach', 'blush',
-        'lilac', 'mint', 'sunshine', 'periwinkle'
+        'sunshine', 'peach', 'blush', 'lilac',
+        'periwinkle', 'sky', 'mint', 'lime'
     },
 
     'metallic': {
-        'gold', 'platinum', 'rose-gold',
-        'copper', 'titanium', 'emerald'
+        'gold', 'copper', 'rose-gold',
+        'ruby', 'emerald', 'sapphire',
+        'iron', 'silver', 'diamond',
+        'opal', 'titanium', 'aurora', 'nebula',
+        'platinum'
     }
 }
+
 
 
 def init_pool():
@@ -677,13 +682,7 @@ def update_identity_profile(raw_token, data):
         if session is None:
             return None
 
-        if (
-            collection == 'metallic'
-            and not current['metallic_unlocked']
-        ):
-            raise PermissionError(
-                'Metallic collection is locked'
-            )
+
 
         updated = db.execute(
             '''
@@ -711,7 +710,7 @@ def update_identity_profile(raw_token, data):
 
     return {
         'identity': public_identity(updated),
-        'metallicUnlocked': updated['metallic_unlocked'],
+        'metallicUnlocked': True,
         'discoverable': updated['discoverable'],
         'allowRequests': updated['allow_requests']
     }
@@ -1423,7 +1422,7 @@ class Handler(SimpleHTTPRequestHandler):
 
                 return self.reply(200, {
                     'identity': public_identity(identity),
-                    'metallicUnlocked': identity['metallic_unlocked'],
+                    'metallicUnlocked': True,
                     'discoverable': identity['discoverable'],
                     'allowRequests': identity['allow_requests']
                 })
