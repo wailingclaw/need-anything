@@ -1,5 +1,7 @@
 from pathlib import Path
-from PIL import Image
+from PIL import Image, ImageDraw
+import cv2
+import numpy as np
 
 ROOT = Path(__file__).resolve().parent
 
@@ -92,7 +94,41 @@ CENTERS = [
     (1566, 768),
 ]
 
+def remove_embedded_symbol(tile):
+    pixels = np.array(tile.convert("RGB"))
 
+    height, width = pixels.shape[:2]
+
+    mask_image = Image.new(
+        "L",
+        (width, height),
+        0
+    )
+
+    draw = ImageDraw.Draw(mask_image)
+
+    draw.ellipse(
+        (
+            int(width * 0.17),
+            int(height * 0.18),
+            int(width * 0.83),
+            int(height * 0.79)
+        ),
+        fill=255
+    )
+
+    mask = np.array(mask_image)
+
+    restored = cv2.inpaint(
+        pixels,
+        mask,
+        7,
+        cv2.INPAINT_TELEA
+    )
+
+    return Image.fromarray(
+        restored
+    ).convert("RGBA")
 def build_emblems():
     if not SOURCE.exists():
         raise FileNotFoundError(
@@ -133,7 +169,7 @@ def build_emblems():
             (TILE_SIZE, TILE_SIZE),
             Image.Resampling.LANCZOS
         )
-
+        tile = remove_embedded_symbol(tile)
         column = index % COLUMNS
         row = index // COLUMNS
 
