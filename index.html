@@ -1290,7 +1290,7 @@ button:disabled {
 
 .emblem-collection-tabs {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 6px;
 }
 
@@ -1373,9 +1373,55 @@ button:disabled {
     drop-shadow(0 1px 1px rgba(0,0,0,.85))
     drop-shadow(0 0 2px rgba(255,255,255,.85));
 }
+.emblem-neon {
+  border: none;
+  box-shadow: none;
+}
 
+.emblem-neon svg {
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .65));
+}
 /* End Medallion Appearance */
+/* Emblem Collection Panels */
 
+#emblemColorGroups {
+  padding: 14px;
+  border: 1px solid var(--app-border);
+  border-radius: 16px;
+  background: var(--app-surface);
+}
+
+#emblemColorGroups .emblem-group-heading {
+  margin: 0 0 14px;
+  text-align: center;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+#emblemColorGroups .emblem-color-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+#emblemColorGroups .emblem-swatch {
+  width: 56px;
+  height: 56px;
+  max-width: 100%;
+  aspect-ratio: 1;
+}
+
+#emblemColorGroups .emblem-color-option {
+  padding: 10px 2px;
+  background: transparent;
+  border: 1px solid transparent;
+}
+
+#emblemColorGroups .emblem-color-option.selected {
+  background: var(--app-active);
+  border-color: var(--app-accent);
+}
+
+/* End Emblem Collection Panels */
 /* End My Emblem Customization */
 
 </style>
@@ -7072,10 +7118,8 @@ init();
       Pastels
     </button>
 
-    <button type="button"
-            data-emblem-collection="metallic">
-      Metallic
-    </button>
+<button type="button" data-emblem-collection="metallic">Metals</button>
+<button type="button" data-emblem-collection="neon">Neon</button>
 
   </div>
 
@@ -7263,10 +7307,12 @@ const EMBLEM_COLLECTIONS = {
 
   metallic: [
     'gold', 'copper', 'rose-gold',
-    'silver', 'iron',
-    'emerald', 'ruby', 'sapphire',
-    'diamond', 'opal', 'titanium',
-    'aurora', 'nebula'
+    'silver', 'iron'
+  ],
+
+  neon: [
+    'acid-lime', 'hot-pink', 'neon-orange',
+    'ultraviolet', 'cyan-glow'
   ]
 };
 
@@ -7276,17 +7322,10 @@ const METALLIC_GROUPS = {
   'Polished Metals': [
     'gold', 'copper', 'rose-gold',
     'silver', 'iron'
-  ],
-
-  'Gemstone Tones': [
-    'emerald', 'ruby', 'sapphire'
-  ],
-
-  'Iridescent Finishes': [
-    'diamond', 'opal', 'titanium',
-    'aurora', 'nebula'
   ]
 };
+
+
 
 // End My Emblem Configuration
 
@@ -7686,25 +7725,26 @@ const EMBLEM_ARTWORK = {
     'rose-gold': 18,
     silver: 19,
     iron: 20,
-    emerald: 21,
-    ruby: 22,
-    sapphire: 23,
-    diamond: 24,
-    opal: 25,
-    titanium: 26,
-    aurora: 27,
-    nebula: 28,
     platinum: 19
+  },
+
+  neon: {
+    'acid-lime': 21,
+    'hot-pink': 22,
+    'neon-orange': 23,
+    ultraviolet: 24,
+    'cyan-glow': 25
   }
 };
 
 
 
 function applyEmblemArtwork(element, draft) {
-  const collection =
-    EMBLEM_ARTWORK[draft.emblemCollection];
+  const collection = EMBLEM_ARTWORK[draft.emblemCollection];
 
-  const tile = collection?.[draft.emblemColor];
+  const tile = collection
+    ? collection[draft.emblemColor]
+    : undefined;
 
   if (!Number.isInteger(tile)) return;
 
@@ -7718,17 +7758,6 @@ function applyEmblemArtwork(element, draft) {
 
   element.style.backgroundPosition =
     `${column * 20}% ${row * 25}%`;
-}
-(element, draft) {
-  const collection = EMBLEM_ARTWORK[draft.emblemCollection];
-
-  const artwork = collection
-    ? collection[draft.emblemColor]
-    : null;
-
-  if (artwork) {
-    element.style.backgroundImage = `url("${artwork}")`;
-  }
 }
 
 // End Emblem Artwork Configuration
@@ -7749,7 +7778,7 @@ element.classList.toggle(
   'emblem-metallic',
   draft.emblemCollection === 'metallic'
 );
-
+element.classList.toggle('emblem-neon', draft.emblemCollection === 'neon');
 element.classList.toggle(
   'emblem-nature',
   draft.emblemCollection === 'nature'
@@ -7789,9 +7818,17 @@ function renderEmblemColors() {
       button.setAttribute('aria-pressed', String(selected));
     });
 
-  const groups = collection === 'metallic'
-    ? METALLIC_GROUPS
-    : { '': EMBLEM_COLLECTIONS[collection] };
+const COLLECTION_TITLES = {
+  nature: 'Nature Inspired',
+  pastel: 'Modern Pastels',
+  metallic: 'Polished Metals',
+  neon: 'Neon Brights'
+};
+
+const groups = {
+  [COLLECTION_TITLES[collection]]:
+    EMBLEM_COLLECTIONS[collection]
+};
 
   Object.entries(groups).forEach(([heading, colors]) => {
     if (heading) {
@@ -7967,7 +8004,13 @@ document.getElementById('saveMyEmblem')
     if (!activeIdentity) {
     
 profileButton.removeAttribute('style');
-delete profileButton.dataset.finish;
+profileButton.classList.remove(
+  'emblem-medallion',
+  'emblem-nature',
+  'emblem-pastel',
+  'emblem-metallic',
+  'emblem-neon'
+);delete profileButton.dataset.finish;
 delete profileButton.dataset.collection;
 
 profileButton.innerHTML = `
