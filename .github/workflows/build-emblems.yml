@@ -19,8 +19,8 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install Pillow
-        run: pip install Pillow
+      - name: Install image processing dependencies
+        run: pip install Pillow numpy opencv-python-headless
 
       - name: Build emblem artwork
         run: python build_emblems.py
