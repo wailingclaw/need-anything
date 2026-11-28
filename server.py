@@ -1563,6 +1563,8 @@ class Handler(SimpleHTTPRequestHandler):
        
 
         public_files = {
+'/emblem-artwork.webp',
+
             '/', '/index.html', '/sw.js',
             '/manifest.webmanifest', '/icon.svg',
             '/needanything-logo.png'
