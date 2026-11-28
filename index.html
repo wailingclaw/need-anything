@@ -7656,13 +7656,70 @@ const EMBLEM_COLORS = {
 
 // My Emblem — Artwork Configuration
 
+
 const EMBLEM_ARTWORK = {
-  nature: {},
-  pastel: {},
-  metallic: {}
+  nature: {
+    sand: 0,
+    sunset: 1,
+    meadow: 2,
+    forest: 3,
+    ocean: 4,
+    glacier: 5,
+    lavender: 6,
+    stone: 7
+  },
+
+  pastel: {
+    sunshine: 8,
+    peach: 9,
+    blush: 10,
+    lilac: 11,
+    periwinkle: 12,
+    sky: 13,
+    mint: 14,
+    lime: 15
+  },
+
+  metallic: {
+    gold: 16,
+    copper: 17,
+    'rose-gold': 18,
+    silver: 19,
+    iron: 20,
+    emerald: 21,
+    ruby: 22,
+    sapphire: 23,
+    diamond: 24,
+    opal: 25,
+    titanium: 26,
+    aurora: 27,
+    nebula: 28,
+    platinum: 19
+  }
 };
 
+
+
 function applyEmblemArtwork(element, draft) {
+  const collection =
+    EMBLEM_ARTWORK[draft.emblemCollection];
+
+  const tile = collection?.[draft.emblemColor];
+
+  if (!Number.isInteger(tile)) return;
+
+  const column = tile % 6;
+  const row = Math.floor(tile / 6);
+
+  element.style.backgroundImage =
+    'url("/emblem-artwork.webp")';
+
+  element.style.backgroundSize = '600% 500%';
+
+  element.style.backgroundPosition =
+    `${column * 20}% ${row * 25}%`;
+}
+(element, draft) {
   const collection = EMBLEM_ARTWORK[draft.emblemCollection];
 
   const artwork = collection
