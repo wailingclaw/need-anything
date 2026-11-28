@@ -1328,6 +1328,54 @@ button:disabled {
   height: 52%;
 }
 
+/* My Emblem — Medallion Appearance */
+
+.emblem-medallion {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border-radius: 50%;
+  box-sizing: border-box;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: cover;
+}
+
+.emblem-medallion svg,
+.emblem-medallion > span {
+  position: relative;
+  z-index: 2;
+}
+
+.emblem-nature {
+  box-shadow:
+    inset 0 1px 2px rgba(255,255,255,.45),
+    inset 0 -2px 3px rgba(0,0,0,.15),
+    0 2px 4px rgba(0,0,0,.16);
+}
+
+.emblem-pastel {
+  box-shadow:
+    inset 0 2px 3px rgba(255,255,255,.65),
+    inset 0 -2px 3px rgba(0,0,0,.12),
+    0 2px 4px rgba(0,0,0,.14);
+}
+
+.emblem-metallic {
+  border: 1px solid rgba(255,255,255,.75);
+  box-shadow:
+    inset 0 0 3px rgba(255,255,255,.65),
+    0 2px 5px rgba(0,0,0,.35);
+}
+
+.emblem-metallic svg {
+  filter:
+    drop-shadow(0 1px 1px rgba(0,0,0,.85))
+    drop-shadow(0 0 2px rgba(255,255,255,.85));
+}
+
+/* End Medallion Appearance */
+
 /* End My Emblem Customization */
 
 </style>
@@ -7606,6 +7654,28 @@ const EMBLEM_COLORS = {
   lime: '#C6DF9A'
 };
 
+// My Emblem — Artwork Configuration
+
+const EMBLEM_ARTWORK = {
+  nature: {},
+  pastel: {},
+  metallic: {}
+};
+
+function applyEmblemArtwork(element, draft) {
+  const collection = EMBLEM_ARTWORK[draft.emblemCollection];
+
+  const artwork = collection
+    ? collection[draft.emblemColor]
+    : null;
+
+  if (artwork) {
+    element.style.backgroundImage = `url("${artwork}")`;
+  }
+}
+
+// End Emblem Artwork Configuration
+
 function paintEmblem(element, draft, name) {
   element.replaceChildren(
     createEmblemSymbol(draft.emblem, name)
@@ -7615,12 +7685,31 @@ function paintEmblem(element, draft, name) {
     EMBLEM_COLORS[draft.emblemColor] || '#293842';
 
   element.style.backgroundImage = '';
-  element.style.color = '#FFFFFF';
+  
+element.classList.add('emblem-medallion');
+
+element.classList.toggle(
+  'emblem-metallic',
+  draft.emblemCollection === 'metallic'
+);
+
+element.classList.toggle(
+  'emblem-nature',
+  draft.emblemCollection === 'nature'
+);
+
+element.classList.toggle(
+  'emblem-pastel',
+  draft.emblemCollection === 'pastel'
+);
+element.style.color = '#FFFFFF';
   element.style.backgroundSize = 'cover';
   element.style.backgroundPosition = 'center';
 
   element.dataset.finish = draft.emblemColor;
   element.dataset.collection = draft.emblemCollection;
+
+applyEmblemArtwork(element, draft);
 }
 
 function renderEmblemColors() {
