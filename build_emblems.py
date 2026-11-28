@@ -102,8 +102,9 @@ def build_emblems():
     source = Image.open(SOURCE).convert("RGBA")
 
     if source.size != (1648, 928):
-        raise ValueError(
-            f"Unexpected source dimensions: {source.size}"
+        source = source.resize(
+            (1648, 928),
+            Image.Resampling.LANCZOS
         )
 
     sprite = Image.new(
