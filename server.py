@@ -126,21 +126,42 @@ IDENTITY_EMBLEMS = {
 
 IDENTITY_EMBLEM_COLORS = {
     'nature': {
-        'sand', 'sunset', 'meadow', 'forest',
-        'ocean', 'glacier', 'lavender', 'stone'
+        'sand',
+        'sunset',
+        'meadow',
+        'forest',
+        'ocean',
+        'glacier',
+        'lavender',
+        'stone'
     },
 
     'pastel': {
-        'sunshine', 'peach', 'blush', 'lilac',
-        'periwinkle', 'sky', 'mint', 'lime'
+        'sunshine',
+        'peach',
+        'blush',
+        'lilac',
+        'periwinkle',
+        'sky',
+        'mint',
+        'lime'
     },
 
     'metallic': {
-        'gold', 'copper', 'rose-gold',
-        'ruby', 'emerald', 'sapphire',
-        'iron', 'silver', 'diamond',
-        'opal', 'titanium', 'aurora', 'nebula',
+        'gold',
+        'copper',
+        'rose-gold',
+        'silver',
+        'iron',
         'platinum'
+    },
+
+    'neon': {
+        'acid-lime',
+        'hot-pink',
+        'neon-orange',
+        'ultraviolet',
+        'cyan-glow'
     }
 }
 
