@@ -96,38 +96,79 @@ CENTERS = [
 
 def remove_embedded_symbol(tile):
     pixels = np.array(tile.convert("RGB"))
-
     height, width = pixels.shape[:2]
 
-    mask_image = Image.new(
-        "L",
-        (width, height),
-        0
+    gray = cv2.cvtColor(
+        pixels,
+        cv2.COLOR_RGB2GRAY
     )
 
-    draw = ImageDraw.Draw(mask_image)
-
-    draw.ellipse(
-        (
-            int(width * 0.17),
-            int(height * 0.18),
-            int(width * 0.83),
-            int(height * 0.79)
-        ),
-        fill=255
+    # Restrict detection to the symbol area.
+    region = np.zeros(
+        (height, width),
+        dtype=np.uint8
     )
 
-    mask = np.array(mask_image)
+    cv2.ellipse(
+        region,
+        (width // 2, height // 2),
+        (int(width * 0.36), int(height * 0.36)),
+        0,
+        0,
+        360,
+        255,
+        -1
+    )
 
+    # Detect narrow bright outlines.
+    kernel = cv2.getStructuringElement(
+        cv2.MORPH_ELLIPSE,
+        (15, 15)
+    )
+
+    bright = cv2.morphologyEx(
+        gray,
+        cv2.MORPH_TOPHAT,
+        kernel
+    )
+
+    _, mask = cv2.threshold(
+        bright,
+        22,
+        255,
+        cv2.THRESH_BINARY
+    )
+
+    mask = cv2.bitwise_and(mask, region)
+
+    # Include the immediate outline and shadow.
+    shadow_kernel = cv2.getStructuringElement(
+        cv2.MORPH_ELLIPSE,
+        (9, 9)
+    )
+
+    mask = cv2.dilate(
+        mask,
+        shadow_kernel,
+        iterations=1
+    )
+
+    mask = cv2.bitwise_and(mask, region)
+
+    # Reconstruct only the detected areas.
     restored = cv2.inpaint(
         pixels,
         mask,
-        7,
+        4,
         cv2.INPAINT_TELEA
     )
 
+    # Preserve every pixel outside the mask.
+    result = pixels.copy()
+    result[mask > 0] = restored[mask > 0]
+
     return Image.fromarray(
-        restored
+        result
     ).convert("RGBA")
 def build_emblems():
     if not SOURCE.exists():
