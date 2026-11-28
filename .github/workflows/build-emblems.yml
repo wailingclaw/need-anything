@@ -1,0 +1,32 @@
+name: Build Emblem Artwork
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-emblems:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Pillow
+        run: pip install Pillow
+
+      - name: Build emblem artwork
+        run: python build_emblems.py
+
+      - name: Save artwork for inspection
+        uses: actions/upload-artifact@v4
+        with:
+          name: emblem-artwork
+          path: emblem-artwork.webp
